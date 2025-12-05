@@ -1,0 +1,1010 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1" />
+    <title>Parametric CAD – Web</title>
+    <style>
+      *, *::before, *::after { box-sizing: border-box; }
+      html, body { margin:0; height:100%; background:linear-gradient(180deg, #EBEBEB, #E5E5E5); color:#111; font-family: Inter, ui-sans-serif, system-ui, -apple-system, Segoe UI, Roboto, Arial; overflow:hidden; }
+      .app { display:grid; grid-template-columns: 360px minmax(0,1fr); height:100vh; align-items: stretch; gap:0; }
+      .sidebar { padding:24px; height:100%; overflow-y:auto; overflow-x:hidden; scrollbar-gutter: stable both-edges; }
+      .neo { width:100%; max-width: 100%; background:#EBEBEB; border-radius:28px; box-shadow: 8px 8px 20px rgba(0,0,0,0.12), -8px -8px 20px rgba(255,255,255,0.7); padding:24px; display:flex; flex-direction:column; gap:24px; }
+      .title { font-size:13px; font-weight:700; letter-spacing:1.2px; text-transform:uppercase; color:#777; }
+      .chat { display:flex; flex-direction:column; gap:10px; }
+      .chat.dark { background:#0e0f14; color:#e6e6e6; border-radius:16px; padding:10px; box-shadow: inset 0 0 0 1px rgba(255,255,255,0.05); }
+      .messages { display:flex; flex-direction:column; gap:8px; overflow:auto; padding:8px; border-radius:12px; }
+      .messages.dark { background:transparent; border:1px solid rgba(255,255,255,0.06); height:260px; }
+      .bubble { max-width: 100%; padding:10px 12px; border-radius:12px; font-size:13px; line-height:1.45; }
+      .bubble.user { align-self:flex-end; background:#1f2430; color:#e6e6e6; border-top-right-radius:4px; box-shadow: inset 0 0 0 1px rgba(255,255,255,0.06); }
+      .bubble.ai { align-self:flex-start; background:#141722; color:#e0e0e0; border-top-left-radius:4px; box-shadow: inset 0 0 0 1px rgba(255,255,255,0.06); }
+      .thinking { display:flex; align-items:center; gap:8px; color:#9aa7ff; font-size:12px; opacity:0.9; padding:4px 2px 0; }
+      .thinking.hidden { display:none; }
+      .thinking .dots { width:18px; height:8px; position:relative; display:inline-block; }
+      .thinking .dots::before, .thinking .dots::after { content:""; position:absolute; top:0; width:6px; height:6px; border-radius:50%; background:#9aa7ff; opacity:0.6; animation: pulse 1.2s infinite ease-in-out; }
+      .thinking .dots::before { left:0; animation-delay: 0s; }
+      .thinking .dots::after { right:0; animation-delay: .4s; }
+      @keyframes pulse { 0%, 100% { transform:scale(0.7); opacity:.4;} 50% { transform:scale(1); opacity:.9;} }
+      .composer { display:flex; align-items:center; gap:8px; background:#0b0c12; border-radius:9999px; padding:6px 10px; border:1px solid #2a2d36; }
+      .composer input { flex:1; border:none; outline:none; font:14px/1.4 sans-serif; padding:8px; color:#e8e8e8; background:transparent; }
+      .composer input::placeholder { color:#8892aa; }
+      .composer-actions { display:flex; gap:8px; justify-content:flex-end; margin-top:6px; }
+      .modal { display:none; position:fixed; inset:0; background:rgba(0,0,0,0.7); z-index:1000; align-items:center; justify-content:center; }
+      .modal.show { display:flex; }
+      .modal-content { background:#1a1d28; border-radius:16px; padding:24px; max-width:700px; width:90%; max-height:80vh; overflow:auto; box-shadow: 0 20px 60px rgba(0,0,0,0.5); }
+      .modal-header { display:flex; justify-content:space-between; align-items:center; margin-bottom:16px; }
+      .modal-title { font-size:18px; font-weight:700; color:#e6e6e6; }
+      .modal-close { background:none; border:none; color:#999; font-size:24px; cursor:pointer; padding:4px 8px; }
+      .modal-close:hover { color:#fff; }
+      .spec-editor { width:100%; min-height:300px; background:#0e0f14; color:#e6e6e6; border:1px solid #2a2d36; border-radius:8px; padding:12px; font-family: ui-monospace, monospace; font-size:13px; line-height:1.5; resize:vertical; }
+      .modal-actions { display:flex; gap:12px; margin-top:16px; justify-content:flex-end; }
+      .export-btn { background:#2a2d36; color:#e6e6e6; border:none; padding:6px 12px; border-radius:8px; font-size:12px; cursor:pointer; }
+      .export-btn:hover { background:#35394a; }
+      .btn { background:linear-gradient(135deg, #8DFFC4, #A0FFD0); color:#0b2a1e; border:0; padding:12px 16px; border-radius:16px; font-weight:700; letter-spacing:0.2px; cursor:pointer; box-shadow:0 10px 22px rgba(0,0,0,0.12); }
+      .btn.secondary { background:#ECECEC; color:#222; box-shadow: 6px 6px 14px rgba(0,0,0,0.08), -6px -6px 14px rgba(255,255,255,0.8); }
+      .row { display:flex; gap:12px; align-items:center; flex-wrap:wrap; width:100%; }
+      .spec { flex:1; background:#EFEFEF; border-radius:20px; padding:12px; overflow:auto; font-family: ui-monospace, SFMono-Regular, Menlo, Consolas, 'Liberation Mono', monospace; font-size:12px; min-height:140px; box-shadow: inset 6px 6px 12px rgba(0,0,0,0.07), inset -6px -6px 12px rgba(255,255,255,0.75); }
+      .viewer { position:relative; height:100vh; min-width:0; }
+      iframe { position:absolute; inset:0; width:100%; height:100%; border:0; }
+      .list { background:#EFEFEF; border-radius:16px; padding:10px; max-height:160px; overflow:auto; box-shadow: inset 6px 6px 12px rgba(0,0,0,0.07), inset -6px -6px 12px rgba(255,255,255,0.75); }
+      .history { background:#EFEFEF; border-radius:16px; padding:10px; display:flex; flex-direction:column; gap:6px; max-height:140px; overflow:auto; box-shadow: inset 6px 6px 12px rgba(0,0,0,0.07), inset -6px -6px 12px rgba(255,255,255,0.75); }
+      .history-item { padding:8px 10px; border-radius:14px; background:#EBEBEB; box-shadow: 6px 6px 14px rgba(0,0,0,0.08), -6px -6px 14px rgba(255,255,255,0.8); }
+      .history-title { font-weight:700; font-size:12px; color:#111; }
+      .history-sub { font-size:11px; color:#777; }
+      .list-item { padding:8px 10px; border-radius:14px; background:#EBEBEB; margin-bottom:6px; }
+      .list-item.active { outline:2px solid #A0FFD0; }
+      .controls { display:flex; gap:10px; flex-wrap:wrap; }
+      select, .toggle, input[type="range"] { background:#EFEFEF; color:#111; border:0; border-radius:16px; padding:8px 10px; box-shadow: inset 6px 6px 12px rgba(0,0,0,0.07), inset -6px -6px 12px rgba(255,255,255,0.75); }
+      label { font-size:12px; color:#555; }
+      .mode { display:flex; justify-content:space-between; gap:20px; background:#EBEBEB; border-radius:24px; padding:20px; box-shadow: inset 8px 8px 18px rgba(0,0,0,0.06), inset -8px -8px 18px rgba(255,255,255,0.8); }
+      .circle-btn { width:110px; height:110px; display:flex; align-items:center; justify-content:center; border-radius:50%; background:#EBEBEB; box-shadow: 8px 8px 18px rgba(0,0,0,0.1), -8px -8px 18px rgba(255,255,255,0.8); transition: all .15s ease; cursor:pointer; }
+      .circle-btn.active { box-shadow: inset 8px 8px 18px rgba(0,0,0,0.08), inset -8px -8px 18px rgba(255,255,255,0.9); }
+      .status-card { display:flex; align-items:center; justify-content:space-between; gap:16px; padding:20px; border-radius:24px; background:#FFFFFF; box-shadow: 8px 8px 20px rgba(0,0,0,0.1); }
+      .status-left { width:80px; height:80px; border-radius:50%; background:linear-gradient(135deg,#8DFFC4,#A0FFD0); display:flex; align-items:center; justify-content:center; box-shadow: 6px 6px 16px rgba(0,0,0,0.12); }
+      .status-right { flex:1; }
+      .status-title { font-size:28px; font-weight:800; color:#111; }
+      .status-sub { font-size:18px; color:#999; }
+    </style>
+  </head>
+  <body>
+    <div class="app">
+      <div class="sidebar">
+        <div class="neo">
+          <div class="title">Mode</div>
+          <div class="mode">
+            <div id="mDesktop" class="circle-btn" title="Desktop">
+              <svg width="48" height="48" viewBox="0 0 24 24" fill="none" stroke="#111" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
+                <rect x="3" y="4" width="18" height="12" rx="2" ry="2"></rect>
+                <line x1="8" y1="20" x2="16" y2="20"></line>
+                <line x1="12" y1="16" x2="12" y2="20"></line>
+              </svg>
+            </div>
+            <div id="mSun" class="circle-btn active" title="Day">
+              <svg width="48" height="48" viewBox="0 0 24 24" fill="none" stroke="#111" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
+                <circle cx="12" cy="12" r="4"></circle>
+                <line x1="12" y1="2" x2="12" y2="6"></line>
+                <line x1="12" y1="18" x2="12" y2="22"></line>
+                <line x1="2" y1="12" x2="6" y2="12"></line>
+                <line x1="18" y1="12" x2="22" y2="12"></line>
+                <line x1="4.22" y1="4.22" x2="6.34" y2="6.34"></line>
+                <line x1="17.66" y1="17.66" x2="19.78" y2="19.78"></line>
+                <line x1="4.22" y1="19.78" x2="6.34" y2="17.66"></line>
+                <line x1="17.66" y1="6.34" x2="19.78" y2="4.22"></line>
+              </svg>
+            </div>
+            <div id="mMoon" class="circle-btn" title="Night">
+              <svg width="48" height="48" viewBox="0 0 24 24" fill="none" stroke="#111" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
+                <path d="M21 12.79A9 9 0 1 1 11.21 3 7 7 0 0 0 21 12.79z"></path>
+              </svg>
+            </div>
+          </div>
+
+          <div class="title">Brightness</div>
+          <input id="brightness" type="range" min="0.6" max="1.6" step="0.02" value="1.1" aria-label="Brightness" />
+
+          <div class="title">Chat</div>
+          <div class="chat dark">
+            <div id="messages" class="messages dark" aria-live="polite"></div>
+            <div id="thinking" class="thinking hidden"><span class="dots"></span><span>Thinking</span></div>
+            <div class="composer" role="group" aria-label="Chat composer">
+              <input id="chatInput" type="text" placeholder="Ask anything (Ctrl+L)" aria-label="Message" />
+            </div>
+            <div class="composer-actions">
+              <button id="chatAsk" class="btn secondary" title="Ask (Q&A only)">Chat</button>
+              <button id="sendSpec" class="btn" title="Render (Parametric Spec)">Render</button>
+            </div>
+          </div>
+          
+          <!-- Spec Refinement Modal -->
+          <div id="specModal" class="modal">
+            <div class="modal-content">
+              <div class="modal-header">
+                <span class="modal-title">Refine Enhanced Specification</span>
+                <button class="modal-close" onclick="$('specModal').classList.remove('show')">×</button>
+              </div>
+              <textarea id="specEditor" class="spec-editor" placeholder="Edit the enhanced specification here..."></textarea>
+              <div style="display:flex; gap:8px; margin-top:12px;">
+                <button class="export-btn" onclick="exportSpec('txt')">Export as TXT</button>
+                <button class="export-btn" onclick="exportSpec('json')">Export as JSON</button>
+              </div>
+              <div class="modal-actions">
+                <button class="btn secondary" onclick="$('specModal').classList.remove('show')">Cancel</button>
+                <button class="btn" onclick="generateFromRefinedSpec()">Generate Model</button>
+              </div>
+            </div>
+          </div>
+          <div class="title">Part Library</div>
+          <div class="list" id="partLibrary" style="display:grid; grid-template-columns:1fr 1fr; gap:6px; max-height:180px;">
+            <button class="btn secondary" style="font-size:11px; padding:8px 6px;" onclick="insertPart('gear')">⚙️ Gear</button>
+            <button class="btn secondary" style="font-size:11px; padding:8px 6px;" onclick="insertPart('bearing')">◉ Bearing</button>
+            <button class="btn secondary" style="font-size:11px; padding:8px 6px;" onclick="insertPart('shaft')">│ Shaft</button>
+            <button class="btn secondary" style="font-size:11px; padding:8px 6px;" onclick="insertPart('bracket')">⌐ Bracket</button>
+            <button class="btn secondary" style="font-size:11px; padding:8px 6px;" onclick="insertPart('bolt')">┼ Bolt</button>
+            <button class="btn secondary" style="font-size:11px; padding:8px 6px;" onclick="insertPart('nut')">⬡ Nut</button>
+            <button class="btn secondary" style="font-size:11px; padding:8px 6px;" onclick="insertPart('wheel')">◯ Wheel</button>
+            <button class="btn secondary" style="font-size:11px; padding:8px 6px;" onclick="insertPart('pulley')">⊙ Pulley</button>
+            <button class="btn secondary" style="font-size:11px; padding:8px 6px;" onclick="insertPart('hinge')">◧ Hinge</button>
+            <button class="btn secondary" style="font-size:11px; padding:8px 6px;" onclick="insertPart('spring')">∿ Spring</button>
+          </div>
+          <div class="title">Import</div>
+          <div class="row">
+            <button id="importFile" class="btn secondary">Import File</button>
+            <button id="importUrl" class="btn secondary">Import URL</button>
+            <input id="fileInput" type="file" accept=".glb,.gltf,.obj,.stl,.fbx" style="display:none" aria-label="Import 3D model" title="Import 3D model" />
+          </div>
+          <div class="title">Look & Controls</div>
+          <div class="controls">
+            <label class="toggle"><input id="spin" type="checkbox"/> Auto-Spin</label>
+            <label class="toggle"><input id="grid" type="checkbox"/> Grid</label>
+            <label class="toggle"><input id="axes" type="checkbox"/> Axes</label>
+            <label>Preset
+              <select id="preset">
+                <option value="luminous">Luminous</option>
+                <option value="studio">Studio</option>
+                <option value="wireframe">Wireframe</option>
+              </select>
+            </label>
+            <label>Background
+              <select id="background">
+                <option value="night">Night</option>
+                <option value="neutral">Neutral</option>
+                <option value="horizon">Horizon</option>
+              </select>
+            </label>
+            <button id="fit" class="btn secondary">Fit</button>
+            <button id="move" class="btn secondary">Move</button>
+            <button id="rotate" class="btn secondary">Rotate</button>
+            <button id="scale" class="btn secondary">Scale</button>
+            <button id="recenter" class="btn secondary">Recenter</button>
+            <button id="unit" class="btn secondary">Unit Scale</button>
+          </div>
+          <div class="title">Snapping</div>
+          <div class="controls">
+            <label class="toggle"><input id="snapEnable" type="checkbox" checked/> Enable Snap</label>
+            <label>Translate <input id="snapT" type="number" step="0.01" value="0.1" style="width:80px"/></label>
+            <label>Rotate° <input id="snapR" type="number" step="1" value="15" style="width:80px"/></label>
+            <label>Scale <input id="snapS" type="number" step="0.05" value="0.1" style="width:80px"/></label>
+          </div>
+          <div class="title">Grid Settings</div>
+          <div class="controls">
+            <label>Size <input id="gridSize" type="number" step="1" value="10" style="width:80px"/></label>
+            <label>Divisions <input id="gridDiv" type="number" step="1" value="10" style="width:100px"/></label>
+            <button id="applyGrid" class="btn secondary">Apply Grid</button>
+          </div>
+          <div class="title">Parts Library</div>
+          <div class="controls">
+            <button class="btn secondary" data-part="gear">Gear</button>
+            <button class="btn secondary" data-part="pulley">Pulley</button>
+            <button class="btn secondary" data-part="wheel">Wheel</button>
+            <button class="btn secondary" data-part="axle">Axle</button>
+            <button class="btn secondary" data-part="lever">Lever</button>
+            <button class="btn secondary" data-part="bracket">Bracket</button>
+            <button class="btn secondary" data-part="plate">Plate</button>
+            <button class="btn secondary" data-part="beam">Beam</button>
+            <button class="btn secondary" data-part="hinge">Hinge</button>
+            <button class="btn secondary" data-part="slider">Slider</button>
+            <button class="btn secondary" data-part="bearing">Bearing</button>
+          </div>
+
+          <div class="title">Inspector <span id="inspectorLabel" style="font-size:10px; color:#888;"></span></div>
+          <div class="list" style="display:grid; grid-template-columns: repeat(3, 1fr); gap:10px; align-items:center;">
+            <label>Pos X<input id="posX" type="number" step="0.1" /></label>
+            <label>Pos Y<input id="posY" type="number" step="0.1" /></label>
+            <label>Pos Z<input id="posZ" type="number" step="0.1" /></label>
+            <label>Rot X<input id="rotX" type="number" step="0.05" /></label>
+            <label>Rot Y<input id="rotY" type="number" step="0.05" /></label>
+            <label>Rot Z<input id="rotZ" type="number" step="0.05" /></label>
+            <label>Scale X<input id="sclX" type="number" step="0.1" value="1" /></label>
+            <label>Scale Y<input id="sclY" type="number" step="0.1" value="1" /></label>
+            <label>Scale Z<input id="sclZ" type="number" step="0.1" value="1" /></label>
+            <label style="grid-column: span 3;">Color <input id="color" type="color" value="#9aa7ff" /></label>
+            <div style="grid-column: span 3; display:flex; gap:8px; flex-wrap:wrap;">
+              <button class="btn secondary chip" data-color="#6b9cff" style="width:28px;height:28px;background:#6b9cff" aria-label="Color #6b9cff" title="Blue"></button>
+              <button class="btn secondary chip" data-color="#8dffc4" style="width:28px;height:28px;background:#8dffc4" aria-label="Color #8dffc4" title="Mint"></button>
+              <button class="btn secondary chip" data-color="#ffc06b" style="width:28px;height:28px;background:#ffc06b" aria-label="Color #ffc06b" title="Orange"></button>
+              <button class="btn secondary chip" data-color="#ff8bad" style="width:28px;height:28px;background:#ff8bad" aria-label="Color #ff8bad" title="Pink"></button>
+              <button class="btn secondary chip" data-color="#a0ffd0" style="width:28px;height:28px;background:#a0ffd0" aria-label="Color #a0ffd0" title="Aqua"></button>
+              <button class="btn secondary chip" data-color="#ffd670" style="width:28px;height:28px;background:#ffd670" aria-label="Color #ffd670" title="Yellow"></button>
+              <button class="btn secondary chip" data-color="#8ea1b5" style="width:28px;height:28px;background:#8ea1b5" aria-label="Color #8ea1b5" title="Gray"></button>
+              <button class="btn secondary chip" data-color="#d0d6e2" style="width:28px;height:28px;background:#d0d6e2" aria-label="Color #d0d6e2" title="Light Gray"></button>
+              <button class="btn secondary chip" data-color="#ff4b5c" style="width:28px;height:28px;background:#ff4b5c" aria-label="Color #ff4b5c" title="Red"></button>
+              <button class="btn secondary chip" data-color="#34c759" style="width:28px;height:28px;background:#34c759" aria-label="Color #34c759" title="Green"></button>
+            </div>
+            <div style="grid-column: span 3; display:flex; gap:10px;">
+              <button id="applyInspector" class="btn secondary" style="flex:1;">Apply</button>
+              <button id="resetInspector" class="btn secondary">Reset</button>
+            </div>
+          </div>
+
+          <div class="title">Spec</div>
+          <pre id="spec" class="spec" aria-live="polite"></pre>
+          <div class="title">Scene Objects</div>
+          <div id="list" class="list"></div>
+          <div class="title">Editor</div>
+          <div class="row">
+            <button id="deleteBtn" class="btn secondary">Delete</button>
+            <button id="duplicateBtn" class="btn secondary">Duplicate</button>
+          </div>
+          <div class="row" style="margin-top:8px;">
+            <button id="joinBtn" class="btn" style="width:100%; background:#34c759;">⚡ Join Selected</button>
+          </div>
+          <div style="font-size:10px; color:#888; margin-top:4px; padding:0 4px;">Select 2+ objects (Shift+Click), then Join to merge them</div>
+          <div class="row">
+            <button id="groupSel" class="btn secondary">Group Selected</button>
+            <button id="ungroupSel" class="btn secondary">Ungroup</button>
+            <button id="makeGroupPersist" class="btn secondary">Make Group (Persist)</button>
+            <button id="ungroupPersist" class="btn secondary">Ungroup (Persist)</button>
+          </div>
+          <div class="row">
+            <button id="setTarget" class="btn secondary">Set Target</button>
+            <button id="alignCenter" class="btn secondary">Align Center</button>
+            <button id="alignRotation" class="btn secondary">Align Rotation</button>
+            <label>Coaxial Axis
+              <select id="axis">
+                <option value="x">X</option>
+                <option value="y">Y</option>
+                <option value="z" selected>Z</option>
+              </select>
+            </label>
+            <button id="alignCoaxial" class="btn secondary">Align Coaxial</button>
+          </div>
+          <div class="row">
+            <button id="exportSel" class="btn secondary">Export Selected (GLB)</button>
+            <button id="saveScene" class="btn secondary">Save Scene</button>
+            <button id="loadScene" class="btn secondary">Load Scene</button>
+            <input id="loadInput" type="file" accept="application/json" style="display:none" aria-label="Load saved scene" title="Load saved scene" />
+          </div>
+          <div class="title">History</div>
+          <div id="history" class="history"></div>
+
+          <div class="status-card">
+            <div class="status-left">"@"</div>
+            <div class="status-right">
+              <div class="status-title">Active</div>
+              <div class="status-sub">Until changed</div>
+            </div>
+            <div>⌄</div>
+          </div>
+        </div>
+      </div>
+      <div class="viewer">
+        <iframe id="viewer" src="/viewer.html" title="3D Viewer"></iframe>
+      </div>
+    </div>
+    <script>
+      const $ = (id) => document.getElementById(id);
+      const viewer = $('viewer');
+      let lastSpec = null;
+      let selectedId = null;
+      const multiSel = new Set();
+
+      // Fallback: when iframe loads/reloads, re-send current spec and options
+      viewer.addEventListener('load', () => {
+        try{
+          if (lastSpec) { postToViewer('spec', lastSpec); }
+          pushOptions();
+          pushSnap();
+        }catch(_e){}
+      });
+
+      function postToViewer(type, payload){
+        try{ viewer.contentWindow.postMessage({ type, payload, fit: true }, '*'); }catch(_e){}
+      }
+
+      async function callCodeAPI(prompt){
+        const resp = await fetch('/api/build_script', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ prompt }) });
+        const data = await resp.json().catch(()=>({}));
+        if (!resp.ok){
+          if (data && data.error === 'gemini_required'){
+            alert('Gemini is not connected. Please set GEMINI_API_KEY and restart.');
+          } else {
+            alert('Code generation failed: ' + (data && data.error || 'unknown'));
+          }
+          throw new Error('codegen failed');
+        }
+        if (!data || !data.code) throw new Error('Empty code');
+        return data.code;
+      }
+
+      // Stage 3: Client-side validation
+      function validateSpec(specText){
+        const warnings = [];
+        
+        // Extract dimensions
+        const numbers = [...specText.matchAll(/\b(\d+(?:\.\d+)?)\s*mm\b/g)].map(m => parseFloat(m[1]));
+        
+        if (numbers.length > 0) {
+          const minDim = Math.min(...numbers);
+          const maxDim = Math.max(...numbers);
+          
+          if (minDim < 0.5) warnings.push(`Very small dimension (${minDim}mm). Min 0.5mm recommended.`);
+          if (maxDim > 5000) warnings.push(`Very large dimension (${maxDim}mm). Check if realistic.`);
+          if (minDim < 1 && maxDim > 1000) warnings.push('Extreme size variation detected.');
+        }
+        
+        // Wall thickness check
+        const wallMatch = specText.match(/[Ww]all\s*[Tt]hickness[:\s]*(\d+(?:\.\d+)?)\s*mm/);
+        if (wallMatch && parseFloat(wallMatch[1]) < 1.5) {
+          warnings.push(`Wall thickness ${wallMatch[1]}mm may be too thin.`);
+        }
+        
+        // Connection logic check
+        const hasAttach = /attach|connect|join/i.test(specText);
+        const hasBoolean = /boolean|union|difference/i.test(specText);
+        if (hasAttach && !hasBoolean) {
+          warnings.push('Attachment mentioned but no boolean operation specified.');
+        }
+        
+        return { valid: warnings.length === 0, warnings };
+      }
+
+      async function callEnhanceAPI(prompt){
+        const resp = await fetch('/api/enhance', { method:'POST', headers:{'Content-Type':'application/json'}, body: JSON.stringify({ prompt }) });
+        const data = await resp.json().catch(()=>({}));
+        if (!resp.ok){
+          if (data && data.error === 'gemini_required'){
+            alert('Gemini is not connected. Please set GEMINI_API_KEY and restart.');
+          } else {
+            alert('Enhance failed: ' + (data && data.error || 'unknown'));
+          }
+          throw new Error('enhance failed');
+        }
+        return String((data && data.enhanced) || '');
+      }
+
+      async function callAskAPI(prompt){
+        const resp = await fetch('/api/ask', { method:'POST', headers:{'Content-Type':'application/json'}, body: JSON.stringify({ prompt }) });
+        const data = await resp.json().catch(()=>({}));
+        if (!resp.ok){
+          if (data && data.error === 'gemini_required'){
+            alert('Gemini is not connected. Please set GEMINI_API_KEY and restart.');
+          } else {
+            alert('Ask failed: ' + (data && data.error || 'unknown'));
+          }
+          throw new Error('ask failed');
+        }
+        return String((data && data.answer) || '');
+      }
+
+      function pushSpecViaSrc(spec){
+        try{
+          const b64 = btoa(JSON.stringify(spec)).replace(/\+/g,'-').replace(/\//g,'_').replace(/=+$/,'');
+          const params = new URLSearchParams();
+          params.set('spec_b64', b64);
+          params.set('fit', '1');
+          viewer.src = `/viewer.html?${params.toString()}`;
+        }catch(_e){}
+      }
+
+      async function callSpecAPI(prompt, existing){
+        const resp = await fetch('/api/build_spec', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ prompt, existing }) });
+        const data = await resp.json().catch(()=>({}));
+        if (!resp.ok) {
+          if (data && data.error === 'gemini_required') {
+            alert('Gemini is not connected. Please set GEMINI_API_KEY and restart.');
+            throw new Error('Gemini not connected');
+          }
+          throw new Error(typeof data === 'object' ? JSON.stringify(data) : String(data));
+        }
+        return data;
+      }
+
+      // Chat helpers and handlers
+      const thinkingEl = $('thinking');
+      function setThinking(on){ try{ if (thinkingEl) thinkingEl.classList.toggle('hidden', !on); }catch(_e){} }
+      function addMessage(role, content){
+        try{
+          const wrap = document.createElement('div');
+          wrap.className = 'bubble ' + (role === 'user' ? 'user' : 'ai');
+          wrap.textContent = String(content || '');
+          const box = $('messages'); if (!box) return;
+          box.appendChild(wrap); box.scrollTop = box.scrollHeight;
+        }catch(_e){}
+      }
+
+      let currentEnhancedSpec = '';
+      
+      // Part Library: Insert common mechanical parts
+      function insertPart(partType){
+        const partPrompts = {
+          'gear': 'Add a gear: 24 teeth, module 2mm, 50mm diameter, 10mm thick',
+          'bearing': 'Add a ball bearing: 20mm outer diameter, 8mm inner diameter, 7mm width',
+          'shaft': 'Add a cylindrical shaft: 10mm diameter, 80mm length',
+          'bracket': 'Add an L-bracket: 50mm x 50mm, 5mm thick, with mounting holes',
+          'bolt': 'Add a hex bolt: M8 thread, 40mm length, 13mm hex head',
+          'nut': 'Add a hex nut: M8 thread, 13mm across flats, 6.5mm thick',
+          'wheel': 'Add a wheel: 60mm diameter, 20mm width, with hub and spokes',
+          'pulley': 'Add a timing pulley: 40mm diameter, 20 teeth, 15mm wide',
+          'hinge': 'Add a door hinge: 60mm length, 40mm width, cylindrical pin',
+          'spring': 'Add a coil spring: 15mm diameter, 50mm length, 2mm wire thickness'
+        };
+        
+        const prompt = partPrompts[partType];
+        if (prompt) {
+          const input = $('chatInput');
+          if (input) {
+            input.value = prompt;
+            input.focus();
+            addMessage('user', 'Part Library: ' + partType);
+          }
+        }
+      }
+
+      
+      // Export specification
+      function exportSpec(format){
+        try{
+          const spec = $('specEditor').value;
+          if (!spec) { alert('No specification to export'); return; }
+          const blob = format === 'json' 
+            ? new Blob([JSON.stringify({enhanced: spec, timestamp: Date.now()}, null, 2)], {type: 'application/json'})
+            : new Blob([spec], {type: 'text/plain'});
+          const url = URL.createObjectURL(blob);
+          const a = document.createElement('a');
+          a.href = url;
+          a.download = `enhanced_spec_${Date.now()}.${format}`;
+          document.body.appendChild(a); a.click(); a.remove();
+          URL.revokeObjectURL(url);
+        }catch(e){ alert('Export failed: ' + e); }
+      }
+      
+      // Generate from refined spec
+      async function generateFromRefinedSpec(){
+        try{
+          const refinedSpec = $('specEditor').value;
+          if (!refinedSpec) { alert('No specification to use'); return; }
+          $('specModal').classList.remove('show');
+          setThinking(true);
+          addMessage('ai', 'Using refined specification...');
+          addMessage('ai', 'Stage 2: Generating 3D model…');
+          const spec = await callSpecAPI(refinedSpec, lastSpec);
+          addMessage('ai', '✓ Model rendered successfully');
+          setSpec(spec);
+        }catch(err){ addMessage('ai', 'Error: ' + err); }
+        finally { setThinking(false); }
+      }
+
+      async function handleSend(kind){
+        const input = $('chatInput'); const prompt = input ? input.value.trim() : '';
+        if (!prompt) return;
+        addMessage('user', prompt); if (input) input.value = '';
+        try{
+          setThinking(true);
+          if (kind === 'code'){
+            const code = await callCodeAPI(prompt);
+            addMessage('ai', 'Generated code. Running…');
+            viewer.contentWindow.postMessage({ type:'run_script', code }, '*');
+          } else if (kind === 'ask'){
+            const answer = await callAskAPI(prompt);
+            addMessage('ai', answer || '(no answer)');
+          } else {
+            // Three-stage pipeline for Render
+            addMessage('ai', 'Stage 1: Enhancing prompt into detailed specification…');
+            const enhanced = await callEnhanceAPI(prompt);
+            if (enhanced && enhanced !== prompt) {
+              currentEnhancedSpec = enhanced;
+              addMessage('ai', 'Enhanced Specification:\n' + enhanced);
+              
+              // Stage 3: Validate specification
+              const validation = validateSpec(enhanced);
+              if (validation.warnings && validation.warnings.length > 0) {
+                addMessage('ai', '⚠ Validation Warnings:\n' + validation.warnings.join('\n'));
+              }
+              
+              // Offer refinement option
+              setThinking(false);
+              const refineBtn = document.createElement('button');
+              refineBtn.className = 'btn secondary';
+              refineBtn.textContent = 'Refine Spec Before Rendering';
+              refineBtn.style.margin = '8px 0';
+              refineBtn.onclick = ()=>{ $('specEditor').value = currentEnhancedSpec; $('specModal').classList.add('show'); };
+              const msgBox = $('messages');
+              if (msgBox) { msgBox.appendChild(refineBtn); msgBox.scrollTop = msgBox.scrollHeight; }
+              
+              // Auto-continue after 2 seconds if no interaction
+              await new Promise(resolve => setTimeout(resolve, 2000));
+              setThinking(true);
+            }
+            addMessage('ai', 'Stage 2: Generating 3D model…');
+            // Clean up enhanced spec if it's complex JSON
+            let promptForGeneration = enhanced || prompt;
+            try {
+              const parsed = JSON.parse(enhanced);
+              if (parsed.enhanced) {
+                // If enhanced spec is wrapped in JSON, extract the text
+                promptForGeneration = typeof parsed.enhanced === 'string' ? parsed.enhanced : JSON.stringify(parsed.enhanced, null, 2);
+              }
+            } catch (e) {
+              // Not JSON, use as-is
+            }
+            const spec = await callSpecAPI(promptForGeneration, lastSpec);
+            addMessage('ai', '✓ Model rendered successfully');
+            setSpec(spec);
+          }
+        }catch(err){ addMessage('ai', 'Error: ' + err); }
+        finally { setThinking(false); }
+      }
+
+      // Attach chat events
+      const __sendSpecBtn = $('sendSpec'); if (__sendSpecBtn) __sendSpecBtn.addEventListener('click', ()=>handleSend('spec'));
+      const __chatAskBtn = $('chatAsk'); if (__chatAskBtn) __chatAskBtn.addEventListener('click', ()=>handleSend('ask'));
+      const __chatInput = $('chatInput'); if (__chatInput) __chatInput.addEventListener('keydown', (e)=>{ if(e.key==='Enter'){ e.preventDefault(); handleSend('spec'); } });
+      // Ctrl+L to focus input
+      window.addEventListener('keydown', (e)=>{ if (e.ctrlKey && (e.key==='l' || e.key==='L')){ e.preventDefault(); const inp=$('chatInput'); if(inp) inp.focus(); }});
+
+      function setSpec(spec){
+        lastSpec = spec; $('spec').textContent = JSON.stringify(spec, null, 2);
+        // Push via URL to make rendering deterministic even if postMessage races
+        pushSpecViaSrc(spec);
+        // Also try postMessage to update without full reload where possible
+        postToViewer('spec', spec);
+        renderList();
+      }
+
+      function renderList(){
+        const list = $('list'); list.innerHTML = '';
+        if (!lastSpec || !Array.isArray(lastSpec.objects)) return;
+        lastSpec.objects.forEach((o) => {
+          const row = document.createElement('div');
+          row.className = 'list-item' + (o.id === selectedId ? ' active' : '');
+          const cb = document.createElement('input');
+          cb.type='checkbox';
+          cb.style.marginRight='8px';
+          cb.checked = multiSel.has(o.id);
+          const label = document.createElement('span');
+          const lblId = `objlbl-${o.id}`;
+          label.id = lblId;
+          label.textContent = `${o.id} (${o.type})`;
+          cb.setAttribute('aria-labelledby', lblId);
+          cb.setAttribute('title', `Select ${o.id}`);
+          cb.addEventListener('change', ()=>{ if (cb.checked) multiSel.add(o.id); else multiSel.delete(o.id); viewer.contentWindow.postMessage({ type:'select_many', ids:[...multiSel] }, '*'); });
+          label.onclick = () => { selectedId = o.id; postToViewer('spec', lastSpec); viewer.contentWindow.postMessage({ type:'select', id:selectedId }, '*'); renderList(); };
+          row.appendChild(cb); row.appendChild(label);
+          list.appendChild(row);
+        });
+      $('exportSel').addEventListener('click', () => { viewer.contentWindow.postMessage({ type:'export_selected' }, '*'); });
+        // keep viewer in sync with multi selection
+        viewer.contentWindow.postMessage({ type:'select_many', ids:[...multiSel] }, '*');
+      }
+
+      // Old buttons may not exist after chat conversion
+      const _gen = $('gen'); if (_gen) _gen.addEventListener('click', async () => {
+        const prompt = ($('prompt') && $('prompt').value.trim()) || ''; if (!prompt) return;
+        try { const spec = await callSpecAPI(prompt, null); setSpec(spec); } catch (e) { alert('Failed: ' + e); }
+      });
+
+      const _edit = $('edit'); if (_edit) _edit.addEventListener('click', async () => {
+        const prompt = ($('prompt') && $('prompt').value.trim()) || ''; if (!prompt) return;
+        if (!lastSpec) { alert('Generate first.'); return; }
+        try { const spec = await callSpecAPI(prompt, lastSpec); setSpec(spec); } catch (e) { alert('Failed: ' + e); }
+      });
+      
+      $('duplicateBtn').addEventListener('click', () => {
+        if (!selectedId || !lastSpec) return;
+        const obj = (lastSpec.objects||[]).find(o => o.id === selectedId); if(!obj) return;
+        const copy = JSON.parse(JSON.stringify(obj));
+        const base = (obj.type && typeof obj.type==='string') ? obj.type : 'obj';
+        copy.id = nextId(base);
+        copy.transform = copy.transform || { position:[0,0,0], rotation:[0,0,0], scale:[1,1,1] };
+        copy.transform.position = [ (copy.transform.position[0]||0)+0.5, copy.transform.position[1]||0, copy.transform.position[2]||0 ];
+        lastSpec.objects.push(copy);
+        setSpec(lastSpec);
+        selectedId = copy.id; viewer.contentWindow.postMessage({ type:'select', id:selectedId }, '*');
+      });
+
+      const _meshGen = $('meshGen'); if (_meshGen) _meshGen.addEventListener('click', async () => {
+        const prompt = $('prompt').value.trim(); if (!prompt) return;
+        const btn = $('meshGen'); const prev = btn.textContent; btn.disabled = true; btn.textContent = 'Generating…';
+        try {
+          const resp = await fetch('/api/generate_model', { method:'POST', headers:{'Content-Type':'application/json'}, body: JSON.stringify({ prompt }) });
+          const data = await resp.json();
+          if (!resp.ok) throw new Error(data && data.error || 'generation failed');
+          if (data && data.url) { addExternal(data.url, { prompt }); }
+        }
+        catch (err) { alert('Mesh generation failed: ' + err); }
+        finally { btn.disabled = false; btn.textContent = prev; }
+      });
+
+      // Import helpers
+      function ensureSpec(){ if (!lastSpec) lastSpec = { objects: [] }; if(!Array.isArray(lastSpec.objects)) lastSpec.objects = []; }
+      function nextId(base){ ensureSpec(); let idx=1; let id=`${base}${idx}`; const used=new Set(lastSpec.objects.map(o=>String(o.id||''))); while(used.has(id)){ idx++; id=`${base}${idx}`; } return id; }
+      const history = [];
+      function addExternal(url, meta){
+        ensureSpec();
+        const obj = { id: nextId('model'), type:'external_model', params:{ url }, transform:{ position:[0,0,0], rotation:[0,0,0], scale:[1,1,1] } };
+        lastSpec.objects.push(obj); setSpec(lastSpec);
+        viewer.contentWindow.postMessage({ type:'fit' }, '*');
+        viewer.contentWindow.postMessage({ type:'clean', mode:'recenter' }, '*');
+        viewer.contentWindow.postMessage({ type:'clean', mode:'unitscale' }, '*');
+        if (meta){ history.unshift({ url, prompt: meta.prompt || '', time: Date.now() }); renderHistory(); }
+      }
+
+      function renderHistory(){
+        const panel = $('history'); if(!panel) return;
+        panel.innerHTML = '';
+        history.slice(0,5).forEach(item => {
+          const div = document.createElement('div');
+          const date = new Date(item.time).toLocaleTimeString();
+          div.className = 'history-item';
+          div.innerHTML = `<div class="history-title">${item.prompt || 'Mesh'}</div><div class="history-sub">${date}</div>`;
+          div.onclick = () => addExternal(item.url);
+          panel.appendChild(div);
+        });
+      }
+      $('importFile').addEventListener('click', ()=> { 
+        console.log('Import File clicked');
+        $('fileInput').click();
+      });
+      $('fileInput').addEventListener('change', async (e)=>{
+        try{
+          const file = e.target.files && e.target.files[0]; if(!file) return;
+          const fd = new FormData(); fd.append('file', file);
+          const resp = await fetch('/api/upload_model', { method:'POST', body: fd });
+          const data = await resp.json(); if(!resp.ok){ throw new Error(data && data.error || 'upload failed'); }
+          if (data && data.url) addExternal(data.url, { prompt: file.name, source:'upload' });
+        }catch(err){ alert('Import failed: ' + err); }
+        finally { e.target.value = ''; }
+      });
+      $('importUrl').addEventListener('click', async ()=>{
+        console.log('Import URL clicked');
+        const url = window.prompt('Enter GLB/GLTF/OBJ/STL URL'); if(!url) return;
+        try{
+          const resp = await fetch('/api/fetch_model', { method:'POST', headers:{'Content-Type':'application/json'}, body: JSON.stringify({ url }) });
+          const data = await resp.json(); if(!resp.ok){ throw new Error(data && data.error || 'fetch failed'); }
+          if (data && data.url) addExternal(data.url, { prompt:url, source:'url' });
+        }catch(err){ alert('Import failed: ' + err); }
+      });
+
+      // Viewer options
+      function pushOptions(){
+        postToViewer('options', {
+          spin: $('spin').checked,
+          grid: $('grid').checked,
+          axes: $('axes').checked,
+          gridSize: parseInt(($('gridSize').value||'10'), 10),
+          gridDiv: parseInt(($('gridDiv').value||'10'), 10),
+          preset: $('preset').value,
+          background: $('background').value,
+          exposure: parseFloat($('brightness').value)
+        });
+      }
+      function pushSnap(){
+        const on = $('snapEnable').checked;
+        const t = on ? parseFloat($('snapT').value||'0.1') : 0;
+        const r = on ? parseFloat($('snapR').value||'15') : 0;
+        const s = on ? parseFloat($('snapS').value||'0.1') : 0;
+        viewer.contentWindow.postMessage({ type:'snap', payload: { translate: isFinite(t)?t:0, rotate: isFinite(r)?r:0, scale: isFinite(s)?s:0 } }, '*');
+      }
+      $('spin').addEventListener('change', pushOptions);
+      $('preset').addEventListener('change', pushOptions);
+      $('background').addEventListener('change', pushOptions);
+      $('brightness').addEventListener('input', () => pushOptions());
+      $('grid').addEventListener('change', pushOptions);
+      $('axes').addEventListener('change', pushOptions);
+      ['snapEnable','snapT','snapR','snapS'].forEach(id=> $(id).addEventListener('input', pushSnap));
+      $('applyGrid').addEventListener('click', pushOptions);
+      $('fit').addEventListener('click', () => viewer.contentWindow.postMessage({ type:'fit' }, '*'));
+
+      // Transform mode buttons
+      const setMode = (m) => viewer.contentWindow.postMessage({ type:'transform', mode:m, enabled:true }, '*');
+      $('move').addEventListener('click', () => setMode('translate'));
+      $('rotate').addEventListener('click', () => setMode('rotate'));
+      $('scale').addEventListener('click', () => setMode('scale'));
+      $('recenter').addEventListener('click', () => viewer.contentWindow.postMessage({ type:'clean', mode:'recenter' }, '*'));
+      $('unit').addEventListener('click', () => viewer.contentWindow.postMessage({ type:'clean', mode:'unitscale' }, '*'));
+
+      // Inspector controls
+      function fillInspector(data){
+        try{
+          if(!data || !data.transform) return;
+          const t = data.transform;
+          const pos = t.position || [0,0,0];
+          const rot = t.rotation || [0,0,0];
+          const scl = t.scale || [1,1,1];
+          $('posX').value = pos[0].toFixed(2);
+          $('posY').value = pos[1].toFixed(2);
+          $('posZ').value = pos[2].toFixed(2);
+          $('rotX').value = rot[0].toFixed(2);
+          $('rotY').value = rot[1].toFixed(2);
+          $('rotZ').value = rot[2].toFixed(2);
+          $('sclX').value = scl[0].toFixed(2);
+          $('sclY').value = scl[1].toFixed(2);
+          $('sclZ').value = scl[2].toFixed(2);
+          // Set color if available
+          if(data.color){
+            $('color').value = data.color;
+          } else if(data.params && data.params.color){
+            const colorVal = typeof data.params.color === 'string' ? data.params.color : '#9aa7ff';
+            $('color').value = colorVal;
+          } else {
+            $('color').value = '#9aa7ff';
+          }
+        }catch(e){ console.error('fillInspector error:', e); }
+      }
+      
+      function updateList(){ renderList(); }
+      
+      function updateInspectorLabel(){
+        const label = $('inspectorLabel');
+        if(!label) return;
+        if(multiSel.size > 1){
+          label.textContent = `(${multiSel.size} objects selected - color will apply to all)`;
+        } else if(multiSel.size === 1){
+          label.textContent = '(1 object selected)';
+        } else if(selectedId){
+          label.textContent = '';
+        } else {
+          label.textContent = '(no selection)';
+        }
+      }
+      
+      $('applyInspector').addEventListener('click', () => {
+        try{
+          // Apply to single selection or multiple selections
+          const targetIds = multiSel.size > 0 ? [...multiSel] : (selectedId ? [selectedId] : []);
+          if(targetIds.length === 0 || !lastSpec) return;
+          
+          const newColor = $('color').value;
+          const newPos = [
+            parseFloat($('posX').value) || 0,
+            parseFloat($('posY').value) || 0,
+            parseFloat($('posZ').value) || 0
+          ];
+          const newRot = [
+            parseFloat($('rotX').value) || 0,
+            parseFloat($('rotY').value) || 0,
+            parseFloat($('rotZ').value) || 0
+          ];
+          const newScl = [
+            parseFloat($('sclX').value) || 1,
+            parseFloat($('sclY').value) || 1,
+            parseFloat($('sclZ').value) || 1
+          ];
+          
+          targetIds.forEach(id => {
+            const obj = lastSpec.objects.find(o => o.id === id);
+            if(!obj) return;
+            
+            obj.transform = obj.transform || { position:[0,0,0], rotation:[0,0,0], scale:[1,1,1] };
+            // Only apply transform if it's a single selection (to avoid messing up multiple objects' positions)
+            if(targetIds.length === 1) {
+              obj.transform.position = newPos;
+              obj.transform.rotation = newRot;
+              obj.transform.scale = newScl;
+            }
+            
+            // Always apply color to all selected objects
+            obj.params = obj.params || {};
+            obj.params.color = newColor;
+          });
+          
+          setSpec(lastSpec);
+        }catch(e){ alert('Apply failed: ' + e); }
+      });
+      
+      $('resetInspector').addEventListener('click', () => {
+        try{
+          $('posX').value = '0';
+          $('posY').value = '0';
+          $('posZ').value = '0';
+          $('rotX').value = '0';
+          $('rotY').value = '0';
+          $('rotZ').value = '0';
+          $('sclX').value = '1';
+          $('sclY').value = '1';
+          $('sclZ').value = '1';
+          $('color').value = '#9aa7ff';
+        }catch(e){ console.error('Reset inspector error:', e); }
+      });
+      
+      // Color chip buttons - apply color to all selected objects
+      document.querySelectorAll('.chip').forEach(btn => {
+        btn.addEventListener('click', () => {
+          const color = btn.getAttribute('data-color');
+          if(color){
+            $('color').value = color;
+            
+            // Apply to multi-selection or single selection
+            const targetIds = multiSel.size > 0 ? [...multiSel] : (selectedId ? [selectedId] : []);
+            if(targetIds.length > 0 && lastSpec){
+              targetIds.forEach(id => {
+                const obj = lastSpec.objects.find(o => o.id === id);
+                if(obj){
+                  obj.params = obj.params || {};
+                  obj.params.color = color;
+                }
+              });
+              setSpec(lastSpec);
+            }
+          }
+        });
+      });
+
+      // Outline actions
+      $('deleteBtn').addEventListener('click', () => {
+        if (!selectedId || !lastSpec) return;
+        lastSpec.objects = (lastSpec.objects||[]).filter(o => o.id !== selectedId);
+        selectedId = null; setSpec(lastSpec);
+      });
+      $('joinBtn').addEventListener('click', async () => {
+        if (multiSel.size < 2) { 
+          alert('Select 2 or more objects to join (Shift+Click or use checkboxes)'); 
+          return; 
+        }
+        const ids = [...multiSel];
+        const objectNames = ids.join(', ');
+        const confirmed = confirm(`Join these objects into one: ${objectNames}?`);
+        if (!confirmed) return;
+        
+        try {
+          // Send join command to backend
+          const prompt = `Join/merge these objects into a single unified object: ${objectNames}`;
+          addMessage('user', 'Joining: ' + objectNames);
+          setThinking(true);
+          
+          const spec = await callSpecAPI(prompt, lastSpec);
+          addMessage('ai', '✓ Objects joined successfully');
+          setSpec(spec);
+          multiSel.clear();
+          updateList();
+        } catch(err) {
+          addMessage('ai', 'Join failed: ' + err);
+        } finally {
+          setThinking(false);
+        }
+      });
+      
+      $('groupSel').addEventListener('click', () => {
+        if (multiSel.size < 2) { alert('Select 2+ items via checkboxes'); return; }
+        viewer.contentWindow.postMessage({ type:'select_many', ids:[...multiSel] }, '*');
+        viewer.contentWindow.postMessage({ type:'group_temp' }, '*');
+      });
+      $('ungroupSel').addEventListener('click', () => {
+        viewer.contentWindow.postMessage({ type:'ungroup_temp' }, '*');
+      });
+      $('setTarget').addEventListener('click', () => {
+        if (!selectedId) { alert('Select a target item'); return; }
+        viewer.contentWindow.postMessage({ type:'set_align_target', id:selectedId }, '*');
+      });
+      $('alignCenter').addEventListener('click', () => {
+        const ids = [...multiSel]; if (!ids.length) { alert('Checkbox-select items to align'); return; }
+        viewer.contentWindow.postMessage({ type:'align_center', ids }, '*');
+      });
+      $('alignRotation').addEventListener('click', () => {
+        const ids = [...multiSel]; if (!ids.length) { alert('Checkbox-select items to align'); return; }
+        viewer.contentWindow.postMessage({ type:'align_rotation', ids }, '*');
+      });
+      $('alignCoaxial').addEventListener('click', () => {
+        const ids = [...multiSel]; if (!ids.length) { alert('Checkbox-select items to align'); return; }
+        const axis = $('axis').value || 'z';
+        viewer.contentWindow.postMessage({ type:'align_coaxial', ids, axis }, '*');
+      });
+      function cloneObj(o){ return JSON.parse(JSON.stringify(o)); }
+      function add3(a,b){ return [ (a[0]||0)+(b[0]||0), (a[1]||0)+(b[1]||0), (a[2]||0)+(b[2]||0) ]; }
+      function sub3(a,b){ return [ (a[0]||0)-(b[0]||0), (a[1]||0)-(b[1]||0), (a[2]||0)-(b[2]||0) ]; }
+      function mul3(a,b){ return [ (a[0]||1)*(b[0]||1), (a[1]||1)*(b[1]||1), (a[2]||1)*(b[2]||1) ]; }
+      function ensureT(t){ return t || { position:[0,0,0], rotation:[0,0,0], scale:[1,1,1] }; }
+      $('makeGroupPersist').addEventListener('click', () => {
+        try{
+          const ids = [...multiSel]; if (ids.length < 2) { alert('Select 2+ items via checkboxes'); return; }
+          if (!lastSpec || !Array.isArray(lastSpec.objects)) return;
+          const items = lastSpec.objects.filter(o=>ids.includes(o.id)); if(items.length<2) return;
+          // group pivot at average position
+          let avg=[0,0,0]; items.forEach(o=>{ const t=ensureT(o.transform); avg=add3(avg, t.position||[0,0,0]); }); avg=[avg[0]/items.length, avg[1]/items.length, avg[2]/items.length];
+          const groupId = nextId('group');
+          const group = { id: groupId, type:'assembly', params:{ template:'group' }, transform:{ position: avg, rotation:[0,0,0], scale:[1,1,1] }, children: [] };
+          items.forEach(o=>{
+            const child = cloneObj(o);
+            const t = ensureT(child.transform);
+            // convert to local by subtracting group pos (simplified, ignores parent rotation/scale)
+            child.transform = { position: sub3(t.position||[0,0,0], avg), rotation: t.rotation||[0,0,0], scale: t.scale||[1,1,1] };
+            group.children.push(child);
+          });
+          // remove originals and add new group
+          lastSpec.objects = lastSpec.objects.filter(o=>!ids.includes(o.id));
+          lastSpec.objects.push(group);
+          setSpec(lastSpec); selectedId = groupId; multiSel.clear();
+          viewer.contentWindow.postMessage({ type:'select', id:selectedId }, '*');
+        }catch(err){ alert('Group failed: ' + err); }
+      });
+      $('ungroupPersist').addEventListener('click', () => {
+        try{
+          if (!selectedId || !lastSpec) return;
+          const idx = (lastSpec.objects||[]).findIndex(o=>o.id===selectedId); if (idx<0) { alert('Select a persistent group (assembly)'); return; }
+          const grp = lastSpec.objects[idx]; if (!(grp && grp.type==='assembly' && grp.params && grp.params.template==='group' && Array.isArray(grp.children))){ alert('Select a persistent group (assembly)'); return; }
+          const gT = ensureT(grp.transform);
+          const newChildren = grp.children.map(child=>{
+            const c = cloneObj(child); const t=ensureT(c.transform);
+            // world = group + local (simplified)
+            const pos = add3(gT.position||[0,0,0], t.position||[0,0,0]);
+            const rot = add3(gT.rotation||[0,0,0], t.rotation||[0,0,0]);
+            const scl = mul3(gT.scale||[1,1,1], t.scale||[1,1,1]);
+            c.id = nextId(c.type||'obj');
+            c.transform = { position: pos, rotation: rot, scale: scl };
+            return c;
+          });
+          // replace group by its children
+          lastSpec.objects.splice(idx, 1, ...newChildren);
+          setSpec(lastSpec); selectedId=null; multiSel.clear();
+        }catch(err){ alert('Ungroup failed: ' + err); }
+      });
+      $('saveScene').addEventListener('click', () => {
+        try{
+          const data = JSON.stringify(lastSpec||{objects:[]}, null, 2);
+          const blob = new Blob([data], { type:'application/json' });
+          const url = URL.createObjectURL(blob);
+          const a = document.createElement('a'); a.href=url; a.download='scene.json'; document.body.appendChild(a); a.click(); a.remove(); URL.revokeObjectURL(url);
+        }catch(err){ alert('Save failed: ' + err); }
+      });
+      $('loadScene').addEventListener('click', ()=> $('loadInput').click());
+      $('loadInput').addEventListener('change', async (e)=>{
+        try{
+          const file = e.target.files && e.target.files[0]; if(!file) return;
+          const text = await file.text(); const spec = JSON.parse(text);
+          setSpec(spec); selectedId=null; viewer.contentWindow.postMessage({ type:'fit' }, '*');
+        }catch(err){ alert('Load failed: ' + err); }
+        finally { e.target.value=''; }
+      });
+      // Mode selector events (just switch backgrounds)
+      function setModeActive(btn){ ['mDesktop','mSun','mMoon'].forEach(id=>$(id).classList.remove('active')); btn.classList.add('active'); }
+      $('mDesktop').addEventListener('click', ()=>{ setModeActive($('mDesktop')); $('background').value='neutral'; pushOptions(); });
+      $('mSun').addEventListener('click', ()=>{ setModeActive($('mSun')); $('background').value='horizon'; pushOptions(); });
+      $('mMoon').addEventListener('click', ()=>{ setModeActive($('mMoon')); $('background').value='night'; pushOptions(); });
+
+      // Receive spec updates from viewer (after transforms)
+      window.addEventListener('message', (evt) => {
+        const msg = evt && evt.data; if (!msg) return;
+        if (msg.type === 'viewer_ready') {
+          // Re-send current spec and options once the iframe (viewer) is ready
+          try{
+            if (lastSpec) { postToViewer('spec', lastSpec); }
+            pushOptions();
+            pushSnap();
+          }catch(_e){}
+          return;
+        }
+        if (msg.type === 'specUpdated' && msg.payload) {
+          lastSpec = msg.payload; $('spec').textContent = JSON.stringify(lastSpec, null, 2);
+          renderList();
+        } else if (msg.type === 'requestDuplicate' && msg.id){
+          const obj = (lastSpec && lastSpec.objects||[]).find(o=>o.id===msg.id); if(!obj) return;
+          const copy = JSON.parse(JSON.stringify(obj)); const base=(obj.type&&typeof obj.type==='string')?obj.type:'obj';
+          copy.id = nextId(base); copy.transform = copy.transform || { position:[0,0,0], rotation:[0,0,0], scale:[1,1,1] };
+          copy.transform.position = [ (copy.transform.position[0]||0)+0.5, copy.transform.position[1]||0, copy.transform.position[2]||0 ];
+          lastSpec.objects.push(copy); setSpec(lastSpec); selectedId = copy.id; viewer.contentWindow.postMessage({ type:'select', id:selectedId }, '*');
+        } else if (msg.type === 'toggleSelect' && msg.id){
+          if (multiSel.has(msg.id)) multiSel.delete(msg.id); else multiSel.add(msg.id);
+          renderList();
+          updateInspectorLabel();
+        } else if (msg.type === 'selectedChanged' && msg.payload){
+          selectedId = msg.payload.id || selectedId;
+          fillInspector(msg.payload);
+          renderList();
+          updateInspectorLabel();
+        }
+      });
+    </script>
+  </body>
+</html>
+
+

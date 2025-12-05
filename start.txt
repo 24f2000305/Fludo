@@ -1,0 +1,1 @@
+cd "c:\Users\sachi\projects\text2mesh\emergent hase\Hase-Person-A"; python -m uvicorn app.server:app --host 127.0.0.1 --port 7860 --reload

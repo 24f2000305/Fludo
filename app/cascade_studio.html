@@ -1,0 +1,1292 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>CASCADE Studio - AI-Powered CAD</title>
+    <link href="https://fonts.googleapis.com/css2?family=Roboto:wght@300;400;500;700&display=swap" rel="stylesheet">
+    <style>
+        * {
+            margin: 0;
+            padding: 0;
+            box-sizing: border-box;
+        }
+        
+        :root {
+            --bg-dark: #1e1e1e;
+            --bg-darker: #252526;
+            --bg-darkest: #1a1a1a;
+            --accent-blue: #007acc;
+            --accent-hover: #1e90ff;
+            --border-color: #3e3e42;
+            --text-primary: #cccccc;
+            --text-secondary: #969696;
+            --sidebar-width: 280px;
+            --toolbar-height: 45px;
+            --statusbar-height: 24px;
+        }
+        
+        body {
+            font-family: 'Roboto', sans-serif;
+            background: var(--bg-darkest);
+            color: var(--text-primary);
+            overflow: hidden;
+            height: 100vh;
+        }
+        
+        /* Main Layout */
+        .cascade-container {
+            display: grid;
+            grid-template-areas:
+                "toolbar toolbar toolbar"
+                "sidebar editor viewer"
+                "status status status";
+            grid-template-columns: var(--sidebar-width) 1fr 1fr;
+            grid-template-rows: var(--toolbar-height) 1fr var(--statusbar-height);
+            height: 100vh;
+            background: var(--bg-darkest);
+        }
+        
+        /* Toolbar */
+        .toolbar {
+            grid-area: toolbar;
+            background: var(--bg-darker);
+            border-bottom: 1px solid var(--border-color);
+            display: flex;
+            align-items: center;
+            padding: 0 15px;
+            gap: 20px;
+        }
+        
+        .toolbar-brand {
+            display: flex;
+            align-items: center;
+            gap: 10px;
+            font-size: 16px;
+            font-weight: 700;
+            color: var(--accent-blue);
+            border-right: 1px solid var(--border-color);
+            padding-right: 20px;
+        }
+        
+        .toolbar-brand-icon {
+            width: 28px;
+            height: 28px;
+            background: linear-gradient(135deg, var(--accent-blue), #1e90ff);
+            border-radius: 4px;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            color: white;
+            font-weight: bold;
+        }
+        
+        .toolbar-section {
+            display: flex;
+            gap: 8px;
+            align-items: center;
+        }
+        
+        .toolbar-divider {
+            width: 1px;
+            height: 24px;
+            background: var(--border-color);
+        }
+        
+        .toolbar-btn {
+            padding: 6px 14px;
+            background: transparent;
+            border: 1px solid transparent;
+            color: var(--text-primary);
+            cursor: pointer;
+            border-radius: 4px;
+            font-size: 13px;
+            transition: all 0.2s;
+            display: flex;
+            align-items: center;
+            gap: 6px;
+        }
+        
+        .toolbar-btn:hover {
+            background: rgba(255, 255, 255, 0.05);
+            border-color: var(--border-color);
+        }
+        
+        .toolbar-btn.primary {
+            background: var(--accent-blue);
+            color: white;
+        }
+        
+        .toolbar-btn.primary:hover {
+            background: var(--accent-hover);
+        }
+        
+        .toolbar-btn.execute {
+            background: linear-gradient(135deg, #10b981, #059669);
+            padding: 8px 20px;
+            font-weight: 500;
+        }
+        
+        .toolbar-btn.execute:hover {
+            transform: translateY(-1px);
+            box-shadow: 0 4px 12px rgba(16, 185, 129, 0.4);
+        }
+        
+        /* Sidebar */
+        .sidebar {
+            grid-area: sidebar;
+            background: var(--bg-darker);
+            border-right: 1px solid var(--border-color);
+            display: flex;
+            flex-direction: column;
+            overflow: hidden;
+        }
+        
+        .sidebar-tabs {
+            display: flex;
+            background: var(--bg-dark);
+            border-bottom: 1px solid var(--border-color);
+        }
+        
+        .sidebar-tab {
+            flex: 1;
+            padding: 10px;
+            text-align: center;
+            cursor: pointer;
+            font-size: 12px;
+            font-weight: 500;
+            color: var(--text-secondary);
+            border-bottom: 2px solid transparent;
+            transition: all 0.2s;
+        }
+        
+        .sidebar-tab:hover {
+            background: var(--bg-darker);
+            color: var(--text-primary);
+        }
+        
+        .sidebar-tab.active {
+            color: var(--accent-blue);
+            border-bottom-color: var(--accent-blue);
+            background: var(--bg-darker);
+        }
+        
+        .sidebar-content {
+            flex: 1;
+            overflow-y: auto;
+            padding: 15px;
+        }
+        
+        .tool-category {
+            margin-bottom: 20px;
+        }
+        
+        .tool-category-title {
+            font-size: 11px;
+            font-weight: 600;
+            text-transform: uppercase;
+            letter-spacing: 1px;
+            color: var(--text-secondary);
+            margin-bottom: 10px;
+            padding-left: 5px;
+        }
+        
+        .tool-grid {
+            display: grid;
+            grid-template-columns: repeat(auto-fill, minmax(70px, 1fr));
+            gap: 8px;
+        }
+        
+        .tool-item {
+            aspect-ratio: 1;
+            background: var(--bg-dark);
+            border: 1px solid var(--border-color);
+            border-radius: 4px;
+            display: flex;
+            flex-direction: column;
+            align-items: center;
+            justify-content: center;
+            gap: 6px;
+            cursor: pointer;
+            transition: all 0.2s;
+            padding: 8px;
+        }
+        
+        .tool-item:hover {
+            background: var(--bg-darkest);
+            border-color: var(--accent-blue);
+            transform: translateY(-2px);
+            box-shadow: 0 4px 12px rgba(0, 122, 204, 0.3);
+        }
+        
+        .tool-item.active {
+            background: rgba(0, 122, 204, 0.2);
+            border-color: var(--accent-blue);
+        }
+        
+        .tool-icon {
+            font-size: 24px;
+            color: var(--accent-blue);
+        }
+        
+        .tool-label {
+            font-size: 10px;
+            text-align: center;
+            color: var(--text-secondary);
+        }
+        
+        /* AI Chat Panel */
+        .ai-chat-panel {
+            display: flex;
+            flex-direction: column;
+            height: 100%;
+        }
+        
+        .chat-messages {
+            flex: 1;
+            overflow-y: auto;
+            padding: 15px;
+            display: flex;
+            flex-direction: column;
+            gap: 12px;
+        }
+        
+        .chat-message {
+            display: flex;
+            gap: 10px;
+            animation: fadeIn 0.3s ease;
+        }
+        
+        @keyframes fadeIn {
+            from { opacity: 0; transform: translateY(10px); }
+            to { opacity: 1; transform: translateY(0); }
+        }
+        
+        .chat-avatar {
+            width: 32px;
+            height: 32px;
+            border-radius: 50%;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            font-size: 14px;
+            font-weight: 600;
+            flex-shrink: 0;
+        }
+        
+        .chat-message.user .chat-avatar {
+            background: linear-gradient(135deg, #10b981, #059669);
+            color: white;
+        }
+        
+        .chat-message.ai .chat-avatar {
+            background: linear-gradient(135deg, var(--accent-blue), #1e90ff);
+            color: white;
+        }
+        
+        .chat-content {
+            flex: 1;
+            background: var(--bg-dark);
+            padding: 12px;
+            border-radius: 6px;
+            font-size: 13px;
+            line-height: 1.6;
+            color: var(--text-primary);
+        }
+        
+        .chat-message.ai .chat-content {
+            background: rgba(0, 122, 204, 0.1);
+            border-left: 2px solid var(--accent-blue);
+        }
+        
+        .chat-input-area {
+            padding: 15px;
+            border-top: 1px solid var(--border-color);
+            background: var(--bg-dark);
+        }
+        
+        .chat-input-wrapper {
+            display: flex;
+            gap: 8px;
+            align-items: flex-end;
+        }
+        
+        .chat-input {
+            flex: 1;
+            background: var(--bg-darker);
+            border: 1px solid var(--border-color);
+            border-radius: 4px;
+            padding: 10px 12px;
+            color: var(--text-primary);
+            font-size: 13px;
+            font-family: inherit;
+            resize: vertical;
+            min-height: 40px;
+            max-height: 120px;
+        }
+        
+        .chat-input:focus {
+            outline: none;
+            border-color: var(--accent-blue);
+            box-shadow: 0 0 0 2px rgba(0, 122, 204, 0.2);
+        }
+        
+        .chat-send-btn {
+            padding: 10px 20px;
+            background: var(--accent-blue);
+            color: white;
+            border: none;
+            border-radius: 4px;
+            cursor: pointer;
+            font-weight: 500;
+            transition: all 0.2s;
+        }
+        
+        .chat-send-btn:hover {
+            background: var(--accent-hover);
+            transform: translateY(-1px);
+        }
+        
+        /* Code Editor */
+        .editor-panel {
+            grid-area: editor;
+            background: var(--bg-dark);
+            display: flex;
+            flex-direction: column;
+            border-right: 1px solid var(--border-color);
+        }
+        
+        .editor-header {
+            background: var(--bg-darker);
+            padding: 10px 15px;
+            border-bottom: 1px solid var(--border-color);
+            display: flex;
+            align-items: center;
+            justify-content: space-between;
+        }
+        
+        .editor-title {
+            font-size: 12px;
+            color: var(--text-secondary);
+            display: flex;
+            align-items: center;
+            gap: 8px;
+        }
+        
+        .editor-title-icon {
+            color: var(--accent-blue);
+        }
+        
+        .editor-actions {
+            display: flex;
+            gap: 8px;
+        }
+        
+        .editor-btn {
+            padding: 4px 10px;
+            background: transparent;
+            border: 1px solid var(--border-color);
+            color: var(--text-secondary);
+            font-size: 11px;
+            border-radius: 3px;
+            cursor: pointer;
+            transition: all 0.2s;
+        }
+        
+        .editor-btn:hover {
+            background: var(--bg-dark);
+            color: var(--text-primary);
+            border-color: var(--accent-blue);
+        }
+        
+        #code-editor {
+            flex: 1;
+            width: 100%;
+            height: 100%;
+        }
+        
+        /* 3D Viewer */
+        .viewer-panel {
+            grid-area: viewer;
+            background: #0f0f15;
+            display: flex;
+            flex-direction: column;
+            position: relative;
+        }
+        
+        .viewer-header {
+            background: rgba(30, 30, 30, 0.95);
+            padding: 10px 15px;
+            border-bottom: 1px solid var(--border-color);
+            display: flex;
+            align-items: center;
+            justify-content: space-between;
+        }
+        
+        .viewer-title {
+            font-size: 12px;
+            color: var(--text-secondary);
+            display: flex;
+            align-items: center;
+            gap: 8px;
+        }
+        
+        .viewer-controls {
+            display: flex;
+            gap: 6px;
+        }
+        
+        .viewer-btn {
+            padding: 6px 12px;
+            background: rgba(255, 255, 255, 0.05);
+            border: 1px solid var(--border-color);
+            color: var(--text-secondary);
+            font-size: 11px;
+            border-radius: 3px;
+            cursor: pointer;
+            transition: all 0.2s;
+            display: flex;
+            align-items: center;
+            gap: 4px;
+        }
+        
+        .viewer-btn:hover {
+            background: rgba(255, 255, 255, 0.1);
+            border-color: var(--accent-blue);
+            color: var(--accent-blue);
+        }
+        
+        .viewer-btn.active {
+            background: rgba(0, 122, 204, 0.2);
+            border-color: var(--accent-blue);
+            color: var(--accent-blue);
+        }
+        
+        #viewer-frame {
+            flex: 1;
+            border: none;
+            width: 100%;
+            height: 100%;
+        }
+        
+        /* Status Bar */
+        .statusbar {
+            grid-area: status;
+            background: var(--accent-blue);
+            color: white;
+            padding: 0 15px;
+            display: flex;
+            align-items: center;
+            justify-content: space-between;
+            font-size: 11px;
+        }
+        
+        .status-left, .status-right {
+            display: flex;
+            gap: 20px;
+            align-items: center;
+        }
+        
+        .status-item {
+            display: flex;
+            align-items: center;
+            gap: 6px;
+        }
+        
+        .status-indicator {
+            width: 8px;
+            height: 8px;
+            border-radius: 50%;
+            background: #10b981;
+            animation: pulse 2s ease-in-out infinite;
+        }
+        
+        @keyframes pulse {
+            0%, 100% { opacity: 1; }
+            50% { opacity: 0.5; }
+        }
+        
+        /* Loading */
+        .loading-overlay {
+            position: fixed;
+            top: 0;
+            left: 0;
+            right: 0;
+            bottom: 0;
+            background: rgba(0, 0, 0, 0.8);
+            display: none;
+            align-items: center;
+            justify-content: center;
+            z-index: 9999;
+        }
+        
+        .loading-overlay.active {
+            display: flex;
+        }
+        
+        .loading-content {
+            background: var(--bg-darker);
+            padding: 30px 40px;
+            border-radius: 8px;
+            border: 1px solid var(--border-color);
+            text-align: center;
+        }
+        
+        .spinner {
+            width: 40px;
+            height: 40px;
+            border: 3px solid var(--border-color);
+            border-top-color: var(--accent-blue);
+            border-radius: 50%;
+            animation: spin 0.8s linear infinite;
+            margin: 0 auto 15px;
+        }
+        
+        @keyframes spin {
+            to { transform: rotate(360deg); }
+        }
+        
+        /* Scrollbar */
+        ::-webkit-scrollbar {
+            width: 8px;
+            height: 8px;
+        }
+        
+        ::-webkit-scrollbar-track {
+            background: var(--bg-dark);
+        }
+        
+        ::-webkit-scrollbar-thumb {
+            background: var(--border-color);
+            border-radius: 4px;
+        }
+        
+        ::-webkit-scrollbar-thumb:hover {
+            background: #4e4e50;
+        }
+        
+        /* Export Dropdown */
+        .export-dropdown {
+            position: relative;
+            display: inline-block;
+        }
+        
+        .export-menu {
+            display: none;
+            position: absolute;
+            top: 100%;
+            left: 0;
+            background: var(--bg-darker);
+            border: 1px solid var(--border-color);
+            border-radius: 4px;
+            margin-top: 5px;
+            min-width: 150px;
+            box-shadow: 0 4px 12px rgba(0, 0, 0, 0.5);
+            z-index: 1000;
+        }
+        
+        .export-menu.show {
+            display: block;
+        }
+        
+        .export-item {
+            padding: 8px 12px;
+            cursor: pointer;
+            font-size: 12px;
+            color: var(--text-primary);
+            transition: all 0.2s;
+        }
+        
+        .export-item:hover {
+            background: var(--bg-dark);
+            color: var(--accent-blue);
+        }
+        
+        .export-item:first-child {
+            border-radius: 4px 4px 0 0;
+        }
+        
+        .export-item:last-child {
+            border-radius: 0 0 4px 4px;
+        }
+    </style>
+</head>
+<body>
+    <div class="cascade-container">
+        <!-- Toolbar -->
+        <div class="toolbar">
+            <div class="toolbar-brand">
+                <div class="toolbar-brand-icon">C</div>
+                <span>CASCADE STUDIO</span>
+            </div>
+            
+            <div class="toolbar-section">
+                <button class="toolbar-btn" id="new-btn">
+                    <span>New</span>
+                </button>
+                <button class="toolbar-btn" id="open-btn">
+                    <span>Open</span>
+                </button>
+                <input type="file" id="file-input" accept=".py,.txt" style="display: none;">
+                <button class="toolbar-btn" id="save-btn">
+                    <span>Save</span>
+                </button>
+            </div>
+            
+            <div class="toolbar-divider"></div>
+            
+            <div class="toolbar-section">
+                <div class="export-dropdown">
+                    <button class="toolbar-btn" id="export-btn">
+                        <span>Export</span>
+                    </button>
+                    <div class="export-menu" id="export-menu">
+                        <div class="export-item" data-format="stl">Export as STL</div>
+                        <div class="export-item" data-format="step">Export as STEP</div>
+                        <div class="export-item" data-format="iges">Export as IGES</div>
+                        <div class="export-item" data-format="dxf">Export as DXF</div>
+                    </div>
+                </div>
+            </div>
+            
+            <div class="toolbar-divider"></div>
+            
+            <div class="toolbar-section" style="margin-left: auto;">
+                <button class="toolbar-btn execute" id="execute-btn">
+                    <span>▶</span> Execute & Render
+                </button>
+            </div>
+        </div>
+        
+        <!-- Sidebar -->
+        <div class="sidebar">
+            <div class="sidebar-tabs">
+                <div class="sidebar-tab active" data-tab="tools">Tools</div>
+                <div class="sidebar-tab" data-tab="ai">AI Agent</div>
+            </div>
+            
+            <div class="sidebar-content">
+                <!-- Tools Tab -->
+                <div class="tab-content" id="tools-tab">
+                    <div class="tool-category">
+                        <div class="tool-category-title">Primitives</div>
+                        <div class="tool-grid">
+                            <div class="tool-item" data-tool="Box">
+                                <div class="tool-icon">◻</div>
+                                <div class="tool-label">Box</div>
+                            </div>
+                            <div class="tool-item" data-tool="Cylinder">
+                                <div class="tool-icon">◯</div>
+                                <div class="tool-label">Cylinder</div>
+                            </div>
+                            <div class="tool-item" data-tool="Sphere">
+                                <div class="tool-icon">◬</div>
+                                <div class="tool-label">Sphere</div>
+                            </div>
+                            <div class="tool-item" data-tool="Cone">
+                                <div class="tool-icon">△</div>
+                                <div class="tool-label">Cone</div>
+                            </div>
+                        </div>
+                    </div>
+                    
+                    <div class="tool-category">
+                        <div class="tool-category-title">Operations</div>
+                        <div class="tool-grid">
+                            <div class="tool-item" data-tool="Union">
+                                <div class="tool-icon">⊕</div>
+                                <div class="tool-label">Union</div>
+                            </div>
+                            <div class="tool-item" data-tool="Subtract">
+                                <div class="tool-icon">⊖</div>
+                                <div class="tool-label">Subtract</div>
+                            </div>
+                            <div class="tool-item" data-tool="Intersect">
+                                <div class="tool-icon">⊗</div>
+                                <div class="tool-label">Intersect</div>
+                            </div>
+                            <div class="tool-item" data-tool="Revolve">
+                                <div class="tool-icon">⟲</div>
+                                <div class="tool-label">Revolve</div>
+                            </div>
+                        </div>
+                    </div>
+                    
+                    <div class="tool-category">
+                        <div class="tool-category-title">Modifications</div>
+                        <div class="tool-grid">
+                            <div class="tool-item" data-tool="Fillet">
+                                <div class="tool-icon">◐</div>
+                                <div class="tool-label">Fillet</div>
+                            </div>
+                            <div class="tool-item" data-tool="Chamfer">
+                                <div class="tool-icon">◑</div>
+                                <div class="tool-label">Chamfer</div>
+                            </div>
+                            <div class="tool-item" data-tool="Array">
+                                <div class="tool-icon">⊡</div>
+                                <div class="tool-label">Array</div>
+                            </div>
+                            <div class="tool-item" data-tool="Mirror">
+                                <div class="tool-icon">⊙</div>
+                                <div class="tool-label">Mirror</div>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+                
+                <!-- AI Chat Tab -->
+                <div class="tab-content" id="ai-tab" style="display: none;">
+                    <div class="ai-chat-panel">
+                        <div class="chat-messages" id="chat-messages">
+                            <div class="chat-message ai">
+                                <div class="chat-avatar">AI</div>
+                                <div class="chat-content">
+                                    Hello! I'm your CASCADE Studio AI assistant. I can help you:
+                                    <br><br>
+                                    • Generate 3D CAD models from descriptions<br>
+                                    • Modify existing designs<br>
+                                    • Explain CadQuery concepts<br>
+                                    • Optimize your parametric code<br>
+                                    <br>
+                                    What would you like to create?
+                                </div>
+                            </div>
+                        </div>
+                        <div class="chat-input-area">
+                            <div class="chat-input-wrapper">
+                                <textarea class="chat-input" id="chat-input" 
+                                          placeholder="Ask AI to generate or modify your design..." 
+                                          rows="2"></textarea>
+                                <button class="chat-send-btn" id="chat-send-btn">Send</button>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+            </div>
+        </div>
+        
+        <!-- Code Editor -->
+        <div class="editor-panel">
+            <div class="editor-header">
+                <div class="editor-title">
+                    <span class="editor-title-icon">Editor</span>
+                    <span>script.py</span>
+                </div>
+                <div class="editor-actions">
+                    <button class="editor-btn" id="clear-editor-btn">Clear</button>
+                    <button class="editor-btn" id="format-btn">Format</button>
+                </div>
+            </div>
+            <div id="code-editor"></div>
+        </div>
+        
+        <!-- 3D Viewer -->
+        <div class="viewer-panel">
+            <div class="viewer-header">
+                <div class="viewer-title">
+                    <span>3D Viewport</span>
+                </div>
+                <div class="viewer-controls">
+                    <button class="viewer-btn active" id="fit-view-btn">
+                        <span>⊡</span> Fit
+                    </button>
+                    <button class="viewer-btn" id="wireframe-btn">
+                        <span>□</span> Wire
+                    </button>
+                    <button class="viewer-btn" id="grid-btn">
+                        <span>⊞</span> Grid
+                    </button>
+                    <button class="viewer-btn" id="reset-view-btn">
+                        <span>↻</span> Reset
+                    </button>
+                </div>
+            </div>
+            <iframe id="viewer-frame" src="/viewer.html"></iframe>
+        </div>
+        
+        <!-- Status Bar -->
+        <div class="statusbar">
+            <div class="status-left">
+                <div class="status-item">
+                    <div class="status-indicator"></div>
+                    <span id="status-text">Ready</span>
+                </div>
+                <div class="status-item">
+                    <span>CadQuery 2.6 + OpenCascade</span>
+                </div>
+            </div>
+            <div class="status-right">
+                <div class="status-item">
+                    <span id="cursor-pos">Ln 1, Col 1</span>
+                </div>
+                <div class="status-item">
+                    <span>Python</span>
+                </div>
+            </div>
+        </div>
+    </div>
+    
+    <!-- Loading Overlay -->
+    <div class="loading-overlay" id="loading-overlay">
+        <div class="loading-content">
+            <div class="spinner"></div>
+            <div>Processing...</div>
+        </div>
+    </div>
+    
+    <!-- Monaco Editor -->
+    <script src="https://cdn.jsdelivr.net/npm/monaco-editor@0.45.0/min/vs/loader.js"></script>
+    <script>
+        let editor;
+        let shapeCounter = 0;
+        
+        // Initialize Monaco Editor
+        require.config({ paths: { vs: 'https://cdn.jsdelivr.net/npm/monaco-editor@0.45.0/min/vs' }});
+        
+        require(['vs/editor/editor.main'], function() {
+            monaco.editor.defineTheme('cascadeTheme', {
+                base: 'vs-dark',
+                inherit: true,
+                rules: [
+                    { token: 'comment', foreground: '6a9955', fontStyle: 'italic' },
+                    { token: 'keyword', foreground: '569cd6' },
+                    { token: 'string', foreground: 'ce9178' },
+                    { token: 'number', foreground: 'b5cea8' },
+                    { token: 'function', foreground: 'dcdcaa' },
+                ],
+                colors: {
+                    'editor.background': '#1e1e1e',
+                    'editor.foreground': '#d4d4d4',
+                    'editor.lineHighlightBackground': '#2a2a2a',
+                    'editorLineNumber.foreground': '#858585',
+                    'editorLineNumber.activeForeground': '#007acc',
+                    'editor.selectionBackground': '#264f78',
+                    'editorCursor.foreground': '#007acc',
+                }
+            });
+            
+            editor = monaco.editor.create(document.getElementById('code-editor'), {
+                value: `import cadquery as cq
+
+# Create a simple box
+result = cq.Workplane("XY").box(50, 40, 30)`,
+                language: 'python',
+                theme: 'cascadeTheme',
+                fontSize: 14,
+                fontFamily: "'Cascadia Code', 'Fira Code', 'Consolas', monospace",
+                fontLigatures: true,
+                minimap: { enabled: true },
+                lineNumbers: 'on',
+                automaticLayout: true,
+                padding: { top: 16 },
+            });
+            
+            // Update cursor position
+            editor.onDidChangeCursorPosition((e) => {
+                document.getElementById('cursor-pos').textContent = 
+                    `Ln ${e.position.lineNumber}, Col ${e.position.column}`;
+            });
+        });
+        
+        // Tool Templates
+        const toolTemplates = {
+            'Box': () => {
+                const varName = `box_${++shapeCounter}`;
+                return `\n# Box shape\n${varName} = cq.Workplane("XY").box(50, 40, 30)`;
+            },
+            'Cylinder': () => {
+                const varName = `cylinder_${++shapeCounter}`;
+                return `\n# Cylinder shape\n${varName} = cq.Workplane("XY").cylinder(50, 20).translate((70, 0, 0))`;
+            },
+            'Sphere': () => {
+                const varName = `sphere_${++shapeCounter}`;
+                return `\n# Sphere shape\n${varName} = cq.Workplane("XY").sphere(25).translate((140, 0, 0))`;
+            },
+            'Cone': () => {
+                const varName = `cone_${++shapeCounter}`;
+                return `\n# Cone shape\n${varName} = cq.Workplane("XY").cone(50, 0, 30).translate((210, 0, 0))`;
+            },
+            'Fillet': () => {
+                const varName = `fillet_${++shapeCounter}`;
+                return `\n# Box with filleted edges\n${varName} = (cq.Workplane("XY")\n    .box(50, 40, 30)\n    .edges("|Z")\n    .fillet(2)\n    .translate((0, 70, 0))\n)`;
+            },
+            'Chamfer': () => {
+                const varName = `chamfer_${++shapeCounter}`;
+                return `\n# Box with chamfered edges\n${varName} = (cq.Workplane("XY")\n    .box(50, 40, 30)\n    .edges("|Z")\n    .chamfer(2)\n    .translate((70, 70, 0))\n)`;
+            },
+            'Union': () => {
+                const varName = `union_${++shapeCounter}`;
+                return `\n# Union of two boxes\n${varName}_a = cq.Workplane("XY").box(50, 40, 30).translate((140, 70, 0))\n${varName}_b = cq.Workplane("XY").box(30, 30, 40).translate((140, 70, 20))\n${varName} = ${varName}_a.union(${varName}_b)`;
+            },
+            'Subtract': () => {
+                const varName = `subtract_${++shapeCounter}`;
+                return `\n# Box with cylindrical hole\n${varName} = (cq.Workplane("XY")\n    .box(50, 40, 30)\n    .faces(">Z")\n    .workplane()\n    .hole(15)\n    .translate((210, 70, 0))\n)`;
+            },
+            'Intersect': () => {
+                const varName = `intersect_${++shapeCounter}`;
+                return `\n# Intersection of box and cylinder\n${varName}_box = cq.Workplane("XY").box(50, 40, 30).translate((0, 140, 0))\n${varName}_cyl = cq.Workplane("XY").cylinder(50, 25).translate((0, 140, 0))\n${varName} = ${varName}_box.intersect(${varName}_cyl)`;
+            },
+            'Revolve': () => {
+                const varName = `revolve_${++shapeCounter}`;
+                return `\n# Revolved shape\n${varName} = (cq.Workplane("XZ")\n    .lineTo(0, 30)\n    .lineTo(20, 30)\n    .lineTo(20, 0)\n    .close()\n    .revolve()\n    .translate((70, 140, 0))\n)`;
+            },
+            'Array': () => {
+                const varName = `array_${++shapeCounter}`;
+                return `\n# Linear array of boxes\n${varName} = (cq.Workplane("XY")\n    .rarray(30, 30, 3, 3)\n    .box(10, 10, 20)\n    .translate((140, 140, 0))\n)`;
+            },
+            'Mirror': () => {
+                const varName = `mirror_${++shapeCounter}`;
+                return `\n# Mirrored shape\n${varName}_half = cq.Workplane("XY").box(50, 20, 30, centered=(False, True, True)).translate((210, 140, 0))\n${varName} = ${varName}_half.union(${varName}_half.mirror("YZ", (210, 0, 0)))`;
+            }
+        };
+        
+        // Helper Functions
+        function extractShapeVariables(code) {
+            const lines = code.split('\n');
+            const shapeVars = [];
+            const seen = new Set();
+            
+            for (const line of lines) {
+                const trimmed = line.trim();
+                if (trimmed.startsWith('#') || !trimmed) continue;
+                
+                const match = line.match(/^([a-z_][a-z0-9_]*)\s*=/);
+                if (match) {
+                    const varName = match[1];
+                    if (varName !== 'result' && 
+                        !varName.endsWith('_a') && 
+                        !varName.endsWith('_b') && 
+                        !varName.endsWith('_half') &&
+                        !varName.endsWith('_box') &&
+                        !varName.endsWith('_cyl') &&
+                        !seen.has(varName)) {
+                        shapeVars.push(varName);
+                        seen.add(varName);
+                    }
+                }
+            }
+            
+            return shapeVars;
+        }
+        
+        function getCurrentShapeVarName(code) {
+            const match = code.match(/^([a-z_0-9]+)\s*=/m);
+            return match ? match[1] : 'shape';
+        }
+        
+        function showStatus(text, type = 'info') {
+            document.getElementById('status-text').textContent = text;
+        }
+        
+        function showLoading(show) {
+            document.getElementById('loading-overlay').classList.toggle('active', show);
+        }
+        
+        function addChatMessage(type, text) {
+            const messages = document.getElementById('chat-messages');
+            const message = document.createElement('div');
+            message.className = `chat-message ${type}`;
+            message.innerHTML = `
+                <div class="chat-avatar">${type === 'user' ? 'U' : 'AI'}</div>
+                <div class="chat-content">${text}</div>
+            `;
+            messages.appendChild(message);
+            messages.scrollTop = messages.scrollHeight;
+            return message;
+        }
+        
+        // Tab Switching
+        document.querySelectorAll('.sidebar-tab').forEach(tab => {
+            tab.addEventListener('click', () => {
+                document.querySelectorAll('.sidebar-tab').forEach(t => t.classList.remove('active'));
+                tab.classList.add('active');
+                
+                const tabName = tab.dataset.tab;
+                document.getElementById('tools-tab').style.display = tabName === 'tools' ? 'block' : 'none';
+                document.getElementById('ai-tab').style.display = tabName === 'ai' ? 'block' : 'none';
+            });
+        });
+        
+        // Tool Items
+        document.querySelectorAll('.tool-item').forEach(item => {
+            item.addEventListener('click', function() {
+                const toolName = this.dataset.tool;
+                const codeTemplateFunc = toolTemplates[toolName];
+                
+                if (codeTemplateFunc) {
+                    let currentCode = editor.getValue().trim();
+                    const hasImport = currentCode.includes('import cadquery as cq');
+                    const newShapeCode = codeTemplateFunc();
+                    
+                    let newCode;
+                    if (!currentCode) {
+                        newCode = `import cadquery as cq${newShapeCode}\n\n# Combine all shapes\nresult = ${getCurrentShapeVarName(newShapeCode)}`;
+                    } else {
+                        newCode = currentCode.replace(/\n*# Combine all shapes[\s\S]*$/, '');
+                        newCode += newShapeCode;
+                        
+                        const shapeVars = extractShapeVariables(newCode);
+                        newCode += '\n\n# Combine all shapes\n';
+                        if (shapeVars.length === 1) {
+                            newCode += `result = ${shapeVars[0]}`;
+                        } else {
+                            newCode += `result = ${shapeVars[0]}`;
+                            for (let i = 1; i < shapeVars.length; i++) {
+                                newCode += `\nresult = result.add(${shapeVars[i]})`;
+                            }
+                        }
+                    }
+                    
+                    editor.setValue(newCode);
+                    const lineCount = editor.getModel().getLineCount();
+                    editor.setPosition({ lineNumber: lineCount, column: 1 });
+                    editor.revealLine(lineCount);
+                    
+                    showStatus(`${toolName} added to editor`);
+                    
+                    // Auto-execute
+                    setTimeout(() => {
+                        document.getElementById('execute-btn').click();
+                    }, 100);
+                }
+            });
+        });
+        
+        // Execute Button
+        document.getElementById('execute-btn').addEventListener('click', async () => {
+            const code = editor.getValue();
+            showStatus('Executing...');
+            showLoading(true);
+            
+            try {
+                const response = await fetch('/api/cad/execute', {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify({ script: code })
+                });
+                
+                const data = await response.json();
+                
+                if (data.error || !data.success) {
+                    showStatus('Execution failed - check console');
+                    addChatMessage('ai', `Error: ${data.error || 'Unknown error'}`);
+                } else {
+                    showStatus('Model rendered successfully');
+                    
+                    // Load in viewer
+                    const viewer = document.getElementById('viewer-frame').contentWindow;
+                    viewer.postMessage({ 
+                        action: 'loadSTL', 
+                        url: data.url 
+                    }, '*');
+                }
+            } catch (error) {
+                showStatus('Connection error');
+                addChatMessage('ai', `Error: ${error.message}`);
+            } finally {
+                showLoading(false);
+            }
+        });
+        
+        // AI Chat
+        const chatInput = document.getElementById('chat-input');
+        const chatSendBtn = document.getElementById('chat-send-btn');
+        
+        chatInput.addEventListener('keydown', (e) => {
+            if (e.key === 'Enter' && (e.ctrlKey || e.metaKey)) {
+                e.preventDefault();
+                chatSendBtn.click();
+            }
+        });
+        
+        chatSendBtn.addEventListener('click', async () => {
+            const message = chatInput.value.trim();
+            if (!message) return;
+            
+            addChatMessage('user', message);
+            chatInput.value = '';
+            
+            showLoading(true);
+            const loadingMsg = addChatMessage('ai', 'Generating...');
+            
+            try {
+                const response = await fetch('/api/cad/generate', {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify({ prompt: message })
+                });
+                
+                const data = await response.json();
+                loadingMsg.remove();
+                
+                if (data.error) {
+                    addChatMessage('ai', `Error: ${data.error}`);
+                } else if (data.code) {
+                    addChatMessage('ai', 'Generated code! Click "Execute & Render" to see it.');
+                    editor.setValue(data.code);
+                    
+                    // Auto-execute
+                    setTimeout(() => {
+                        document.getElementById('execute-btn').click();
+                    }, 500);
+                }
+            } catch (error) {
+                loadingMsg.remove();
+                addChatMessage('ai', `Error: ${error.message}`);
+            } finally {
+                showLoading(false);
+            }
+        });
+        
+        // File Operations
+        document.getElementById('open-btn').addEventListener('click', () => {
+            document.getElementById('file-input').click();
+        });
+        
+        document.getElementById('file-input').addEventListener('change', (e) => {
+            const file = e.target.files[0];
+            if (!file) return;
+            
+            const reader = new FileReader();
+            reader.onload = (event) => {
+                let content = event.target.result.trim();
+                let currentCode = editor.getValue().trim();
+                
+                const lines = content.split('\n');
+                let codeWithoutImport = [];
+                
+                for (const line of lines) {
+                    if (!line.trim().startsWith('import cadquery') && !line.trim().startsWith('import cq')) {
+                        if (line.trim()) codeWithoutImport.push(line);
+                    }
+                }
+                
+                let newCode;
+                if (!currentCode) {
+                    newCode = 'import cadquery as cq\n\n' + codeWithoutImport.join('\n');
+                } else {
+                    currentCode = currentCode.replace(/\n*# Combine all shapes[\s\S]*$/, '');
+                    newCode = currentCode + '\n\n' + codeWithoutImport.join('\n');
+                }
+                
+                const allShapeVars = extractShapeVariables(newCode);
+                if (allShapeVars.length > 0) {
+                    newCode += '\n\n# Combine all shapes\n';
+                    if (allShapeVars.length === 1) {
+                        newCode += `result = ${allShapeVars[0]}`;
+                    } else {
+                        newCode += `result = ${allShapeVars[0]}`;
+                        for (let i = 1; i < allShapeVars.length; i++) {
+                            newCode += `\nresult = result.add(${allShapeVars[i]})`;
+                        }
+                    }
+                }
+                
+                editor.setValue(newCode);
+                showStatus('File imported');
+                
+                setTimeout(() => {
+                    document.getElementById('execute-btn').click();
+                }, 100);
+            };
+            
+            reader.readAsText(file);
+            e.target.value = '';
+        });
+        
+        document.getElementById('new-btn').addEventListener('click', () => {
+            editor.setValue('import cadquery as cq\n\n# Create your model\nresult = cq.Workplane("XY").box(50, 40, 30)');
+            showStatus('New document created');
+        });
+        
+        document.getElementById('clear-editor-btn').addEventListener('click', () => {
+            editor.setValue('import cadquery as cq\n\n');
+            showStatus('Editor cleared');
+        });
+        
+        // Export
+        document.getElementById('export-btn').addEventListener('click', () => {
+            document.getElementById('export-menu').classList.toggle('show');
+        });
+        
+        document.querySelectorAll('.export-item').forEach(item => {
+            item.addEventListener('click', async () => {
+                const format = item.dataset.format;
+                document.getElementById('export-menu').classList.remove('show');
+                
+                const script = editor.getValue();
+                if (!script.trim()) {
+                    showStatus('No script to export');
+                    return;
+                }
+                
+                showLoading(true);
+                showStatus(`Exporting as ${format.toUpperCase()}...`);
+                
+                try {
+                    const response = await fetch(`/api/cad/export/${format}`, {
+                        method: 'POST',
+                        headers: { 'Content-Type': 'application/json' },
+                        body: JSON.stringify({ script })
+                    });
+                    
+                    if (response.ok) {
+                        const blob = await response.blob();
+                        const url = URL.createObjectURL(blob);
+                        const a = document.createElement('a');
+                        a.href = url;
+                        a.download = `model.${format}`;
+                        a.click();
+                        showStatus(`Exported as ${format.toUpperCase()}`);
+                        addChatMessage('ai', `Model exported as ${format.toUpperCase()} successfully!`);
+                    } else {
+                        showStatus('Export failed');
+                        addChatMessage('ai', 'Export failed. Please check your code.');
+                    }
+                } catch (error) {
+                    showStatus('Export error');
+                    addChatMessage('ai', `Export error: ${error.message}`);
+                } finally {
+                    showLoading(false);
+                }
+            });
+        });
+        
+        // Viewer Controls
+        document.getElementById('fit-view-btn').addEventListener('click', () => {
+            const viewer = document.getElementById('viewer-frame').contentWindow;
+            viewer.postMessage({ action: 'fit' }, '*');
+        });
+        
+        document.getElementById('reset-view-btn').addEventListener('click', () => {
+            const viewer = document.getElementById('viewer-frame').contentWindow;
+            viewer.postMessage({ action: 'reset' }, '*');
+        });
+        
+        // Close export menu when clicking outside
+        document.addEventListener('click', (e) => {
+            if (!e.target.closest('.export-dropdown')) {
+                document.getElementById('export-menu').classList.remove('show');
+            }
+        });
+        
+        // Initialize viewer
+        window.addEventListener('load', () => {
+            setTimeout(() => {
+                const viewer = document.getElementById('viewer-frame').contentWindow;
+                if (viewer && viewer.postMessage) {
+                    viewer.postMessage({ 
+                        action: 'setOptions', 
+                        options: { 
+                            grid: true,
+                            axes: true,
+                            background: 'night'
+                        } 
+                    }, '*');
+                }
+            }, 1000);
+        });
+    </script>
+</body>
+</html>

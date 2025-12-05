@@ -1,0 +1,971 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>FLUDO</title>
+    <style>
+        * {
+            margin: 0;
+            padding: 0;
+            box-sizing: border-box;
+        }
+        
+        body {
+            font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif;
+            background: #0d0d0f;
+            color: #e0e0e0;
+            overflow: hidden;
+        }
+        
+        .container {
+            display: flex;
+            height: 100vh;
+            flex-direction: column;
+        }
+        
+        /* Top Toolbar */
+        .toolbar {
+            background: linear-gradient(180deg, #1a1a1d 0%, #13131 5%);
+            padding: 8px 16px;
+            border-bottom: 1px solid #2a2a2f;
+            display: flex;
+            align-items: center;
+            justify-content: space-between;
+            height: 48px;
+            box-shadow: 0 2px 4px rgba(0,0,0,0.3);
+        }
+        
+        .toolbar-left {
+            display: flex;
+            align-items: center;
+            gap: 20px;
+        }
+        
+        .app-title {
+            font-size: 14px;
+            font-weight: 600;
+            color: #ffffff;
+            letter-spacing: 0.5px;
+        }
+        
+        .toolbar-actions {
+            display: flex;
+            gap: 6px;
+            align-items: center;
+        }
+        
+        .tool-btn {
+            background: #2a2a2f;
+            color: #e0e0e0;
+            border: 1px solid #3a3a3f;
+            padding: 6px 14px;
+            border-radius: 4px;
+            cursor: pointer;
+            font-size: 12px;
+            font-weight: 500;
+            transition: all 0.2s;
+            height: 32px;
+        }
+        
+        .tool-btn:hover {
+            background: #3a3a3f;
+            border-color: #4a4a4f;
+        }
+        
+        .tool-btn.primary {
+            background: #0078d4;
+            border-color: #0078d4;
+            color: #fff;
+        }
+        
+        .tool-btn.primary:hover {
+            background: #1084d8;
+        }
+        
+        .tool-btn.success {
+            background: #107c10;
+            border-color: #107c10;
+            color: #fff;
+        }
+        
+        .tool-btn.success:hover {
+            background: #128c12;
+        }
+        
+        .tool-btn:disabled {
+            opacity: 0.4;
+            cursor: not-allowed;
+        }
+        
+        /* Main Content */
+        .main-content {
+            display: flex;
+            flex: 1;
+            overflow: hidden;
+        }
+        
+        /* Left Panel */
+        .left-panel {
+            width: 320px;
+            background: #16161a;
+            border-right: 1px solid #2a2a2f;
+            display: flex;
+            flex-direction: column;
+        }
+        
+        .panel-tabs {
+            display: flex;
+            background: #1a1a1f;
+            border-bottom: 1px solid #2a2a2f;
+        }
+        
+        .panel-tab {
+            flex: 1;
+            padding: 10px;
+            text-align: center;
+            font-size: 12px;
+            color: #a0a0a0;
+            cursor: pointer;
+            border-bottom: 2px solid transparent;
+            transition: all 0.2s;
+        }
+        
+        .panel-tab:hover {
+            color: #e0e0e0;
+            background: #20202 5;
+        }
+        
+        .panel-tab.active {
+            color: #0078d4;
+            border-bottom-color: #0078d4;
+            background: #16161a;
+        }
+        
+        .panel-content {
+            flex: 1;
+            overflow-y: auto;
+            padding: 16px;
+        }
+        
+        .panel-section {
+            margin-bottom: 20px;
+        }
+        
+        .section-title {
+            font-size: 11px;
+            text-transform: uppercase;
+            color: #808080;
+            margin-bottom: 10px;
+            font-weight: 600;
+            letter-spacing: 0.5px;
+        }
+        
+        .input-field {
+            width: 100%;
+            background: #1a1a1f;
+            border: 1px solid #2a2a2f;
+            color: #e0e0e0;
+            padding: 10px;
+            border-radius: 4px;
+            font-size: 13px;
+            font-family: inherit;
+            resize: vertical;
+            min-height: 100px;
+        }
+        
+        .input-field:focus {
+            outline: none;
+            border-color: #0078d4;
+            background: #1e1e23;
+        }
+        
+        .mode-selector {
+            display: flex;
+            gap: 8px;
+            margin-bottom: 16px;
+        }
+        
+        .mode-btn {
+            flex: 1;
+            padding: 10px;
+            background: #1a1a1f;
+            border: 1px solid #2a2a2f;
+            color: #a0a0a0;
+            border-radius: 4px;
+            cursor: pointer;
+            font-size: 12px;
+            font-weight: 500;
+            transition: all 0.2s;
+        }
+        
+        .mode-btn:hover {
+            border-color: #3a3a3f;
+            color: #e0e0e0;
+        }
+        
+        .mode-btn.active {
+            background: #0078d4;
+            border-color: #0078d4;
+            color: #fff;
+        }
+        
+        /* Center Editor */
+        .editor-container {
+            flex: 1;
+            display: flex;
+            flex-direction: column;
+            background: #1e1e1e;
+            min-width: 0;
+        }
+        
+        .editor-header {
+            background: #1a1a1f;
+            padding: 8px 16px;
+            border-bottom: 1px solid #2a2a2f;
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            height: 40px;
+        }
+        
+        .editor-title {
+            font-size: 12px;
+            color: #a0a0a0;
+            font-weight: 500;
+        }
+        
+        .editor-tools {
+            display: flex;
+            gap: 6px;
+        }
+        
+        .icon-btn {
+            background: transparent;
+            border: 1px solid #2a2a2f;
+            color: #a0a0a0;
+            width: 28px;
+            height: 28px;
+            border-radius: 4px;
+            cursor: pointer;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            transition: all 0.2s;
+            font-size: 14px;
+        }
+        
+        .icon-btn:hover {
+            background: #2a2a2f;
+            color: #e0e0e0;
+        }
+        
+        #code-editor {
+            flex: 1;
+            overflow: hidden;
+        }
+        
+        /* Right Panel - 3D Viewer */
+        .viewer-panel {
+            width: 45%;
+            background: #0d0d0f;
+            border-left: 1px solid #2a2a2f;
+            display: flex;
+            flex-direction: column;
+            min-width: 400px;
+        }
+        
+        .viewer-header {
+            background: #1a1a1f;
+            padding: 8px 16px;
+            border-bottom: 1px solid #2a2a2f;
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            height: 40px;
+        }
+        
+        .viewer-title {
+            font-size: 12px;
+            color: #a0a0a0;
+            font-weight: 500;
+        }
+        
+        .viewer-controls {
+            display: flex;
+            gap: 6px;
+        }
+        
+        #viewer-frame {
+            flex: 1;
+            border: none;
+            background: #0d0d0f;
+        }
+        
+        /* Properties Panel */
+        .properties-panel {
+            background: #16161a;
+            border-top: 1px solid #2a2a2f;
+            padding: 12px 16px;
+            max-height: 200px;
+            overflow-y: auto;
+        }
+        
+        .property-row {
+            display: flex;
+            justify-content: space-between;
+            padding: 6px 0;
+            font-size: 11px;
+            border-bottom: 1px solid #1a1a1f;
+        }
+        
+        .property-label {
+            color: #808080;
+        }
+        
+        .property-value {
+            color: #e0e0e0;
+            font-weight: 500;
+        }
+        
+        /* Status Bar */
+        .status-bar {
+            background: #16161a;
+            padding: 6px 16px;
+            font-size: 11px;
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            height: 28px;
+            border-top: 1px solid #2a2a2f;
+        }
+        
+        .status-left, .status-right {
+            display: flex;
+            gap: 16px;
+            align-items: center;
+        }
+        
+        .status-item {
+            color: #808080;
+        }
+        
+        .status-item.success {
+            color: #16c60c;
+        }
+        
+        .status-item.error {
+            color: #e81123;
+        }
+        
+        /* Console */
+        .console-container {
+            max-height: 180px;
+            overflow-y: auto;
+            background: #0d0d0f;
+            padding: 12px;
+            font-family: 'Consolas', 'Courier New', monospace;
+            font-size: 11px;
+            color: #a0a0a0;
+            border-top: 1px solid #2a2a2f;
+        }
+        
+        .console-entry {
+            padding: 3px 0;
+            line-height: 1.5;
+        }
+        
+        .console-entry.error {
+            color: #e81123;
+        }
+        
+        .console-entry.success {
+            color: #16c60c;
+        }
+        
+        .console-entry.info {
+            color: #0078d4;
+        }
+        
+        /* Loading Overlay */
+        .loading-overlay {
+            display: none;
+            position: fixed;
+            top: 0;
+            left: 0;
+            right: 0;
+            bottom: 0;
+            background: rgba(0,0,0,0.7);
+            z-index: 10000;
+            align-items: center;
+            justify-content: center;
+        }
+        
+        .loading-overlay.show {
+            display: flex;
+        }
+        
+        .loading-content {
+            background: #1a1a1f;
+            padding: 30px 40px;
+            border-radius: 8px;
+            border: 1px solid #2a2a2f;
+            text-align: center;
+            box-shadow: 0 8px 32px rgba(0,0,0,0.5);
+        }
+        
+        .spinner {
+            border: 3px solid #2a2a2f;
+            border-top: 3px solid #0078d4;
+            border-radius: 50%;
+            width: 48px;
+            height: 48px;
+            animation: spin 1s linear infinite;
+            margin: 0 auto 16px;
+        }
+        
+        @keyframes spin {
+            0% { transform: rotate(0deg); }
+            100% { transform: rotate(360deg); }
+        }
+        
+        /* Export Dropdown */
+        .export-dropdown {
+            display: none;
+            position: absolute;
+            top: 100%;
+            right: 0;
+            background: #1a1a1f;
+            border: 1px solid #2a2a2f;
+            border-radius: 4px;
+            margin-top: 4px;
+            min-width: 140px;
+            z-index: 1000;
+            box-shadow: 0 4px 12px rgba(0,0,0,0.4);
+        }
+        
+        .export-dropdown.show {
+            display: block;
+        }
+        
+        .export-item {
+            padding: 10px 16px;
+            cursor: pointer;
+            font-size: 12px;
+            color: #e0e0e0;
+            transition: background 0.2s;
+        }
+        
+        .export-item:hover {
+            background: #2a2a2f;
+        }
+        
+        .export-menu {
+            position: relative;
+        }
+        
+        /* Scrollbar */
+        ::-webkit-scrollbar {
+            width: 12px;
+            height: 12px;
+        }
+        
+        ::-webkit-scrollbar-track {
+            background: #16161a;
+        }
+        
+        ::-webkit-scrollbar-thumb {
+            background: #2a2a2f;
+            border-radius: 6px;
+        }
+        
+        ::-webkit-scrollbar-thumb:hover {
+            background: #3a3a3f;
+        }
+    </style>
+</head>
+<body>
+    <div class="container">
+        <!-- Top Toolbar -->
+        <div class="toolbar">
+            <div class="toolbar-left">
+                <div class="app-title">CAD Studio Professional</div>
+            </div>
+            <div class="toolbar-actions">
+                <button class="tool-btn success" id="execute-btn">Execute & Visualize</button>
+                <div class="export-menu">
+                    <button class="tool-btn" id="export-btn">Export</button>
+                    <div class="export-dropdown" id="export-dropdown">
+                        <div class="export-item" data-format="step">STEP Format</div>
+                        <div class="export-item" data-format="stl">STL Format</div>
+                        <div class="export-item" data-format="iges">IGES Format</div>
+                        <div class="export-item" data-format="dxf">DXF Format</div>
+                    </div>
+                </div>
+            </div>
+        </div>
+        
+        <!-- Main Content -->
+        <div class="main-content">
+            <!-- Left Panel -->
+            <div class="left-panel">
+                <div class="panel-tabs">
+                    <div class="panel-tab active" data-tab="design">Design</div>
+                    <div class="panel-tab" data-tab="properties">Properties</div>
+                </div>
+                
+                <div class="panel-content">
+                    <div id="design-tab" class="tab-content">
+                        <div class="panel-section">
+                            <div class="section-title">Mode</div>
+                            <div class="mode-selector">
+                                <button class="mode-btn active" data-mode="ai">AI Assistant</button>
+                                <button class="mode-btn" data-mode="manual">Manual Code</button>
+                            </div>
+                        </div>
+                        
+                        <div class="panel-section" id="ai-section">
+                            <div class="section-title">Design Prompt</div>
+                            <textarea class="input-field" id="ai-prompt" placeholder="Describe your CAD model...
+
+Examples:
+• Mounting bracket 80x60x5mm with M6 holes
+• Gear with 20 teeth, 50mm diameter
+• Robot gripper with parallel jaws
+• Enclosure 100x80x40mm with lid"></textarea>
+                            <div style="margin-top: 12px; display: flex; gap: 8px;">
+                                <button class="tool-btn primary" id="generate-btn" style="flex: 1;">Generate</button>
+                                <button class="tool-btn" id="modify-btn" style="flex: 1;" disabled>Modify</button>
+                            </div>
+                        </div>
+                        
+                        <div class="panel-section" id="manual-section" style="display: none;">
+                            <div class="section-title">Manual Editing</div>
+                            <p style="font-size: 12px; color: #808080; line-height: 1.6;">
+                                Edit CadQuery Python code directly in the editor. 
+                                Use the Execute button to visualize changes.
+                            </p>
+                            <div style="margin-top: 12px;">
+                                <button class="tool-btn" id="example-btn" style="width: 100%;">Load Example</button>
+                            </div>
+                        </div>
+                    </div>
+                    
+                    <div id="properties-tab" class="tab-content" style="display: none;">
+                        <div class="panel-section">
+                            <div class="section-title">Model Properties</div>
+                            <div id="model-properties">
+                                <div class="property-row">
+                                    <span class="property-label">Status</span>
+                                    <span class="property-value" id="prop-status">No model</span>
+                                </div>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+                
+                <!-- Console -->
+                <div class="console-container" id="console-container">
+                    <div class="console-entry">CAD Studio initialized</div>
+                </div>
+            </div>
+            
+            <!-- Center - Code Editor -->
+            <div class="editor-container">
+                <div class="editor-header">
+                    <span class="editor-title">script.py</span>
+                    <div class="editor-tools">
+                        <button class="icon-btn" id="clear-btn" title="Clear">⊗</button>
+                        <button class="icon-btn" id="reset-btn" title="Reset">↻</button>
+                    </div>
+                </div>
+                <div id="code-editor"></div>
+            </div>
+            
+            <!-- Right Panel - 3D Viewer -->
+            <div class="viewer-panel">
+                <div class="viewer-header">
+                    <span class="viewer-title">3D Viewport</span>
+                    <div class="viewer-controls">
+                        <button class="icon-btn" id="reset-view-btn" title="Reset View">⟲</button>
+                        <button class="icon-btn" id="fullscreen-btn" title="Fullscreen">⛶</button>
+                    </div>
+                </div>
+                <iframe id="viewer-frame" src="/viewer.html"></iframe>
+            </div>
+        </div>
+        
+        <!-- Status Bar -->
+        <div class="status-bar">
+            <div class="status-left">
+                <span class="status-item" id="status-message">Ready</span>
+            </div>
+            <div class="status-right">
+                <span class="status-item" id="status-coords">CadQuery + OCCT</span>
+            </div>
+        </div>
+    </div>
+    
+    <!-- Loading Overlay -->
+    <div class="loading-overlay" id="loading-overlay">
+        <div class="loading-content">
+            <div class="spinner"></div>
+            <div>Processing...</div>
+        </div>
+    </div>
+    
+    <!-- Monaco Editor -->
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/monaco-editor/0.44.0/min/vs/loader.min.js"></script>
+    <script>
+        let editor;
+        let currentScript = '';
+        let currentMode = 'ai';
+        
+        // Initialize Monaco Editor
+        require.config({ paths: { vs: 'https://cdnjs.cloudflare.com/ajax/libs/monaco-editor/0.44.0/min/vs' }});
+        
+        require(['vs/editor/editor.main'], function() {
+            editor = monaco.editor.create(document.getElementById('code-editor'), {
+                value: `import cadquery as cq
+
+# Your CadQuery code here
+# Example: Create a simple box
+result = cq.Workplane("XY").box(50, 40, 30)`,
+                language: 'python',
+                theme: 'vs-dark',
+                automaticLayout: true,
+                minimap: { enabled: true },
+                fontSize: 13,
+                lineNumbers: 'on',
+                scrollBeyondLastLine: false,
+                tabSize: 4,
+            });
+            
+            editor.onDidChangeModelContent(() => {
+                currentScript = editor.getValue();
+                updateModifyButton();
+            });
+            
+            currentScript = editor.getValue();
+        });
+        
+        // Tab Switching
+        document.querySelectorAll('.panel-tab').forEach(tab => {
+            tab.addEventListener('click', () => {
+                const tabName = tab.dataset.tab;
+                document.querySelectorAll('.panel-tab').forEach(t => t.classList.remove('active'));
+                tab.classList.add('active');
+                
+                document.querySelectorAll('.tab-content').forEach(content => {
+                    content.style.display = 'none';
+                });
+                document.getElementById(tabName + '-tab').style.display = 'block';
+            });
+        });
+        
+        // Mode Switching
+        document.querySelectorAll('.mode-btn').forEach(btn => {
+            btn.addEventListener('click', () => {
+                currentMode = btn.dataset.mode;
+                document.querySelectorAll('.mode-btn').forEach(b => b.classList.remove('active'));
+                btn.classList.add('active');
+                
+                if (currentMode === 'ai') {
+                    document.getElementById('ai-section').style.display = 'block';
+                    document.getElementById('manual-section').style.display = 'none';
+                } else {
+                    document.getElementById('ai-section').style.display = 'none';
+                    document.getElementById('manual-section').style.display = 'block';
+                }
+            });
+        });
+        
+        // Generate CAD
+        document.getElementById('generate-btn').addEventListener('click', async () => {
+            const prompt = document.getElementById('ai-prompt').value.trim();
+            
+            if (!prompt) {
+                showStatus('Please enter a description', 'error');
+                return;
+            }
+            
+            showLoading(true);
+            logConsole('Generating CadQuery script...', 'info');
+            
+            try {
+                const response = await fetch('/api/cad/generate', {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify({ prompt })
+                });
+                
+                const data = await response.json();
+                
+                if (data.error) {
+                    logConsole(`Error: ${data.error}`, 'error');
+                    showStatus('Generation failed', 'error');
+                    return;
+                }
+                
+                editor.setValue(data.code);
+                currentScript = data.code;
+                logConsole('Script generated successfully', 'success');
+                showStatus('Script generated', 'success');
+                updateModifyButton();
+                
+            } catch (error) {
+                logConsole(`Error: ${error.message}`, 'error');
+                showStatus('Generation failed', 'error');
+            } finally {
+                showLoading(false);
+            }
+        });
+        
+        // Modify Script
+        document.getElementById('modify-btn').addEventListener('click', async () => {
+            const modification = document.getElementById('ai-prompt').value.trim();
+            
+            if (!modification) {
+                showStatus('Please enter modification instructions', 'error');
+                return;
+            }
+            
+            if (!currentScript || currentScript.trim() === '') {
+                showStatus('No script to modify', 'error');
+                return;
+            }
+            
+            showLoading(true);
+            logConsole('Modifying script...', 'info');
+            
+            try {
+                const response = await fetch('/api/cad/modify', {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify({ 
+                        script: currentScript,
+                        modification 
+                    })
+                });
+                
+                const data = await response.json();
+                
+                if (data.error) {
+                    logConsole(`Error: ${data.error}`, 'error');
+                    showStatus('Modification failed', 'error');
+                    return;
+                }
+                
+                editor.setValue(data.code);
+                currentScript = data.code;
+                logConsole('Script modified successfully', 'success');
+                showStatus('Script modified', 'success');
+                
+            } catch (error) {
+                logConsole(`Error: ${error.message}`, 'error');
+                showStatus('Modification failed', 'error');
+            } finally {
+                showLoading(false);
+            }
+        });
+        
+        // Execute and Visualize
+        document.getElementById('execute-btn').addEventListener('click', async () => {
+            const script = editor.getValue();
+            
+            if (!script.trim()) {
+                showStatus('No script to execute', 'error');
+                return;
+            }
+            
+            showLoading(true);
+            logConsole('Executing CadQuery script...', 'info');
+            
+            try {
+                const response = await fetch('/api/cad/execute', {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify({ script })
+                });
+                
+                const data = await response.json();
+                
+                if (!data.success) {
+                    logConsole(`Execution failed: ${data.error}`, 'error');
+                    if (data.traceback) {
+                        logConsole(data.traceback, 'error');
+                    }
+                    showStatus('Execution failed', 'error');
+                    document.getElementById('prop-status').textContent = 'Error';
+                    return;
+                }
+                
+                // Show warnings if any
+                if (data.warnings && data.warnings.length > 0) {
+                    data.warnings.forEach(warning => {
+                        logConsole(`Warning: ${warning}`, 'info');
+                    });
+                }
+                
+                // Update editor if script was modified for recovery
+                if (data.original_script && data.script !== data.original_script) {
+                    logConsole('Model rendered with automatic fixes applied', 'info');
+                    // Optionally update editor to show what worked
+                    // editor.setValue(data.script);
+                }
+                
+                logConsole('Execution successful', 'success');
+                logConsole(`Loading model: ${data.url}`, 'info');
+                
+                // Load in viewer
+                const viewer = document.getElementById('viewer-frame').contentWindow;
+                viewer.postMessage({ 
+                    action: 'loadSTL', 
+                    url: data.url 
+                }, '*');
+                
+                const statusMsg = data.warnings && data.warnings.length > 0 
+                    ? 'Model loaded (with fixes)' 
+                    : 'Model loaded';
+                showStatus(statusMsg, 'success');
+                document.getElementById('prop-status').textContent = 'Loaded';
+                
+            } catch (error) {
+                logConsole(`Error: ${error.message}`, 'error');
+                showStatus('Execution failed', 'error');
+            } finally {
+                showLoading(false);
+            }
+        });
+        
+        // Export
+        document.getElementById('export-btn').addEventListener('click', () => {
+            document.getElementById('export-dropdown').classList.toggle('show');
+        });
+        
+        document.querySelectorAll('.export-item').forEach(item => {
+            item.addEventListener('click', async () => {
+                const format = item.dataset.format;
+                document.getElementById('export-dropdown').classList.remove('show');
+                
+                const script = editor.getValue();
+                if (!script.trim()) {
+                    showStatus('No script to export', 'error');
+                    return;
+                }
+                
+                showLoading(true);
+                logConsole(`Exporting to ${format.toUpperCase()}...`, 'info');
+                
+                try {
+                    const response = await fetch(`/api/cad/export/${format}`, {
+                        method: 'POST',
+                        headers: { 'Content-Type': 'application/json' },
+                        body: JSON.stringify({ script })
+                    });
+                    
+                    if (!response.ok) {
+                        const error = await response.json();
+                        throw new Error(error.error || 'Export failed');
+                    }
+                    
+                    const blob = await response.blob();
+                    const url = window.URL.createObjectURL(blob);
+                    const a = document.createElement('a');
+                    a.href = url;
+                    a.download = `model.${format}`;
+                    document.body.appendChild(a);
+                    a.click();
+                    window.URL.revokeObjectURL(url);
+                    document.body.removeChild(a);
+                    
+                    logConsole(`Exported to ${format.toUpperCase()}`, 'success');
+                    showStatus('Export successful', 'success');
+                    
+                } catch (error) {
+                    logConsole(`Export failed: ${error.message}`, 'error');
+                    showStatus('Export failed', 'error');
+                } finally {
+                    showLoading(false);
+                }
+            });
+        });
+        
+        // Editor Controls
+        document.getElementById('clear-btn').addEventListener('click', () => {
+            editor.setValue('import cadquery as cq\n\n# Your code here\nresult = ');
+        });
+        
+        document.getElementById('reset-btn').addEventListener('click', () => {
+            location.reload();
+        });
+        
+        document.getElementById('example-btn').addEventListener('click', () => {
+            const example = `import cadquery as cq
+
+# Simple mounting bracket (no fillet for reliability)
+result = (cq.Workplane("XY")
+    .rect(80, 60)
+    .extrude(5)
+    .faces(">Z").workplane()
+    .rect(60, 40, forConstruction=True)
+    .vertices()
+    .hole(6)
+)`;
+            editor.setValue(example);
+        });
+        
+        // Viewer Controls
+        document.getElementById('reset-view-btn').addEventListener('click', () => {
+            const viewer = document.getElementById('viewer-frame').contentWindow;
+            viewer.postMessage({ action: 'resetView' }, '*');
+        });
+        
+        // Close dropdown
+        document.addEventListener('click', (e) => {
+            if (!e.target.closest('.export-menu')) {
+                document.getElementById('export-dropdown').classList.remove('show');
+            }
+        });
+        
+        // Helper Functions
+        function showLoading(show) {
+            document.getElementById('loading-overlay').classList.toggle('show', show);
+        }
+        
+        function showStatus(message, type = 'info') {
+            const statusEl = document.getElementById('status-message');
+            statusEl.textContent = message;
+            statusEl.className = 'status-item ' + type;
+            setTimeout(() => {
+                statusEl.textContent = 'Ready';
+                statusEl.className = 'status-item';
+            }, 3000);
+        }
+        
+        function logConsole(message, type = 'info') {
+            const container = document.getElementById('console-container');
+            const entry = document.createElement('div');
+            entry.className = 'console-entry ' + type;
+            const time = new Date().toLocaleTimeString();
+            entry.textContent = `[${time}] ${message}`;
+            container.appendChild(entry);
+            container.scrollTop = container.scrollHeight;
+            
+            // Keep only last 100 entries
+            while (container.children.length > 100) {
+                container.removeChild(container.firstChild);
+            }
+        }
+        
+        function updateModifyButton() {
+            const hasScript = currentScript && currentScript.trim() !== '' && 
+                             !currentScript.includes('# Your CadQuery code here');
+            document.getElementById('modify-btn').disabled = !hasScript;
+        }
+        
+        // Initialize
+        updateModifyButton();
+    </script>
+</body>
+</html>

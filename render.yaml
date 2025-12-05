@@ -1,0 +1,17 @@
+services:
+  - type: web
+    name: fludo-cad-studio
+    runtime: python
+    plan: starter
+    buildCommand: |
+      apt-get update
+      apt-get install -y build-essential libgl1-mesa-dev libglu1-mesa-dev libxi-dev libxmu-dev freeglut3-dev mesa-common-dev
+      pip install --upgrade pip
+      pip install -r requirements.txt
+    startCommand: uvicorn app.server:app --host 0.0.0.0 --port $PORT
+    envVars:
+      - key: GEMINI_API_KEY
+        sync: false
+      - key: PYTHON_VERSION
+        value: "3.11.0"
+    healthCheckPath: /

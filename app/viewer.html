@@ -1,0 +1,1074 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1" />
+  <title>Viewer</title>
+  <style>
+    html, body { margin:0; height:100%; background:#0a0a0a; color:#fff; font-family:'Inter', ui-sans-serif, system-ui, -apple-system, Segoe UI, Roboto, Arial; }
+    body { position:relative; overflow:hidden; }
+    #c { width:100%; height:100%; display:block; }
+    .hint { position:absolute; top:8px; left:8px; color:#aaa; font:12px/1.6 sans-serif; letter-spacing:0.4px; }
+    #overlay { position:absolute; inset:0; background:rgba(5,5,5,0.72); backdrop-filter:blur(6px); display:flex; align-items:center; justify-content:center; color:#f5f5f5; font-size:13px; letter-spacing:1px; text-transform:uppercase; transition:opacity 0.22s ease; }
+    #overlay.hidden { opacity:0; pointer-events:none; }
+    #sel { position:absolute; top:8px; right:8px; color:#d6d8dd; background:rgba(25,25,28,0.65); border:1px solid rgba(80,80,90,0.5); padding:6px 10px; border-radius:10px; font:12px sans-serif; display:none; }
+    #undoBtn { position:absolute; top:8px; right:300px; color:#fff; background:rgba(60,60,70,0.95); border:1px solid rgba(100,100,120,0.8); padding:8px 16px; border-radius:8px; font:13px sans-serif; cursor:pointer; font-weight:500; transition:all 0.2s; }
+    #undoBtn:hover { background:rgba(80,80,100,0.95); border-color:rgba(120,120,150,0.9); }
+    #undoBtn:disabled { opacity:0.4; cursor:not-allowed; }
+  </style>
+  <script type="importmap">
+    {
+      "imports": {
+        "three": "https://cdn.jsdelivr.net/npm/three@0.160.0/build/three.module.js",
+        "three/addons/": "https://cdn.jsdelivr.net/npm/three@0.160.0/examples/jsm/"
+      }
+    }
+  </script>
+</head>
+<body>
+  <canvas id="c"></canvas>
+  <div id="overlay" class="hidden">Preparing Scene…</div>
+  <div id="sel"></div>
+  <button id="undoBtn" title="Undo last action">undo</button>
+  <div class="hint" style="background:rgba(10,10,10,0.75); padding:8px 12px; border-radius:8px; font-size:11px; line-height:1.6;">
+    <strong>Controls:</strong> Drag orbit • Scroll zoom • Click select<br/>
+    <strong>Keys:</strong> W move • E rotate • R scale • F fit view • Del delete<br/>
+    <strong>View:</strong> Arrow keys pan • Shift+Drag pan • Right-click pan
+  </div>
+  <script type="module">
+    import * as THREE from 'three';
+    import { OrbitControls } from 'three/addons/controls/OrbitControls.js';
+    import { TransformControls } from 'three/addons/controls/TransformControls.js';
+    import { GLTFLoader } from 'three/addons/loaders/GLTFLoader.js';
+    import { OBJLoader } from 'three/addons/loaders/OBJLoader.js';
+    import { STLLoader } from 'three/addons/loaders/STLLoader.js';
+    import { FBXLoader } from 'three/addons/loaders/FBXLoader.js';
+    import { GLTFExporter } from 'three/addons/exporters/GLTFExporter.js';
+
+    const DEFAULT_OPTIONS = { spin:false, grid:false, axes:false, preset:'luminous', background:'night', exposure:null, gridSize:100, gridDiv:100 };
+    window.__options = Object.assign({}, DEFAULT_OPTIONS, window.__options || {});
+    window.__viewerReady = false; window.__scene=null; window.__renderer=null; window.__camera=null; window.__controls=null; window.__gridHelper=null; window.__axesHelper=null; window.__last_obj=null; window.__ambientLight=null; window.__lights=window.__lights||{}; window.__spec=null; window.__tcontrols=null; window.__transformEnabled=false; window.__multiSel=[]; window.__groupWrapper=null; window.__alignTarget=null;
+  // Undo stack for simple undo (transform/delete)
+  window.__undoStack = window.__undoStack || [];
+  window.__maxUndo = 100;
+  function pushUndo(action){ try{ if(!action) return; window.__undoStack.push(action); if(window.__undoStack.length>window.__maxUndo) window.__undoStack.shift(); updateUndoButtonState(); }catch(_e){} }
+  function popUndo(){ try{ const a = window.__undoStack.pop(); updateUndoButtonState(); return a; }catch(_e){ return null; } }
+  function peekUndo(){ try{ return window.__undoStack[window.__undoStack.length-1]; }catch(_e){ return null; } }
+  function updateUndoButtonState(){ const btn=document.getElementById('undoBtn'); if(!btn) return; btn.disabled = !(window.__undoStack && window.__undoStack.length>0); btn.style.opacity = btn.disabled ? '0.6' : '1.0'; }
+    let _selected = null;
+    let _transformMode = 'translate'; // Remember user's chosen transform mode (W/E/R)
+    let _lastSelectionTime = 0; // Debounce rapid selections
+    const _raycaster = new THREE.Raycaster(); 
+    _raycaster.params.Line.threshold = 0.1;
+    _raycaster.params.Points.threshold = 0.1;
+    const _ndc = new THREE.Vector2();
+
+    const BACKGROUND_PRESETS = { night:{ color:0x0a0a0a, exposure:1.08, ambient:0.25 }, neutral:{ color:0x151515, exposure:1.0, ambient:0.3 }, horizon:{ color:0x101621, exposure:1.12, ambient:0.28, fog:{ color:0x101621, near:18, far:160 } } };
+    const DEFAULT_MATERIAL_PRESETS = { luminous:{ color:0xb9c6ff, roughness:0.32, metalness:0.75, emissive:0x1c34ff, emissiveIntensity:0.22 }, studio:{ color:0xdedede, roughness:0.56, metalness:0.2, emissive:0x000000, emissiveIntensity:0.0 }, wireframe:{ color:0xffffff, roughness:0.2, metalness:0.0, wireframe:true } };
+    const DEFAULT_PALETTE = [0x6b9cff,0x8dffc4,0xffc06b,0xff8bad,0xa0ffd0,0xffd670,0xb9c6ff,0xd0d6e2,0x8ea1b5,0x9aa7ff];
+    window.__MATERIAL_PRESETS = Object.assign({}, DEFAULT_MATERIAL_PRESETS, window.__MATERIAL_PRESETS || {});
+
+    function showLoading(){ document.getElementById('overlay').classList.remove('hidden'); }
+    function hideLoading(){ document.getElementById('overlay').classList.add('hidden'); }
+    window.showLoading = showLoading; window.hideLoading = hideLoading;
+
+    function disposeMeshResources(node){ if (!node || !node.isMesh) return; if (node.geometry && node.geometry.dispose) node.geometry.dispose(); const material = node.material; if (!material) return; if (Array.isArray(material)) material.forEach(m => m && m.dispose && m.dispose()); else if (material.dispose) material.dispose(); }
+    function resolveColor(v, f){ if (v===undefined||v===null) return f; if (typeof v==='number'||typeof v==='string') return v; if (Array.isArray(v)&&v.length>=3) return new THREE.Color(v[0],v[1],v[2]); if (typeof v==='object'&&'r' in v) return new THREE.Color(v.r,v.g,v.b); return f; }
+    function createMaterial(preset, obj){
+      const cfg = (window.__MATERIAL_PRESETS[preset]||window.__MATERIAL_PRESETS.luminous);
+      const params=(obj&&obj.params)||{};
+      let baseColor = params.color;
+      if (baseColor===undefined || baseColor===null){
+        const key = String((obj && obj.id) || (params && params.id) || Math.random());
+        let hash=0; for(let i=0;i<key.length;i++){ hash=(hash*131 + key.charCodeAt(i))>>>0; }
+        baseColor = DEFAULT_PALETTE[hash % DEFAULT_PALETTE.length] || cfg.color || 0xffffff;
+      }
+      const color=resolveColor(baseColor, cfg.color||0xffffff);
+      const emissiveColor=resolveColor(cfg.emissive, 0x000000);
+      const m=new THREE.MeshStandardMaterial({ color, roughness: cfg.roughness??0.6, metalness: cfg.metalness??0.1, emissive:emissiveColor });
+      m.emissiveIntensity=cfg.emissiveIntensity??0;
+      if (cfg.wireframe) m.wireframe=true;
+      if (cfg.flatShading) m.flatShading=true;
+      if (cfg.transparent){ m.transparent=true; m.opacity=cfg.opacity??1; }
+      m.userData.__preset=preset; m.needsUpdate=true; return m;
+    }
+    window.__createMaterial = createMaterial;
+
+    function loadExternalInto(group, spec){
+      try{
+        const url = (group && group.userData && group.userData.__externalUrl) ? group.userData.__externalUrl : null;
+        if (!url) return;
+        const lower = String(url).split('?')[0].toLowerCase();
+        const attachSpec = (root)=>{
+          root.userData = root.userData || {}; root.userData.__spec = spec;
+          root.traverse(n=>{ if(n.isMesh){ n.userData.__spec = spec; n.castShadow = true; n.receiveShadow = !!n.receiveShadow; } });
+          group.add(root);
+        };
+        if (lower.endsWith('.glb') || lower.endsWith('.gltf')){
+          const loader = new GLTFLoader();
+          loader.load(url, (gltf)=>{ const scene = gltf.scene || (gltf.scenes && gltf.scenes[0]); if(scene){ attachSpec(scene); } }, undefined, (err)=>{ console.error(err); });
+        } else if (lower.endsWith('.obj')){
+          const loader = new OBJLoader();
+          loader.load(url, (obj)=>{
+            const preset = window.__options.preset || 'luminous';
+            obj.traverse(node=>{
+              if (node.isMesh && !node.material){
+                node.material = createMaterial(preset, spec);
+              }
+              if (node.isMesh){ node.castShadow = true; node.receiveShadow = true; }
+            });
+            attachSpec(obj);
+          }, undefined, (err)=>{ console.error(err); });
+        } else if (lower.endsWith('.stl')){
+          const loader = new STLLoader();
+          loader.load(url, (geom)=>{ 
+            console.log('STL loaded! Group parent before:', group.parent);
+            // Simple fixed scale for CadQuery STL models (they export in mm)
+            const mesh = new THREE.Mesh(geom, createMaterial(window.__options.preset||'luminous', spec)); 
+            mesh.scale.set(0.1, 0.1, 0.1);  // 10x larger: 10mm = 1 unit
+            mesh.userData.__spec = spec; 
+            mesh.castShadow = true; 
+            mesh.receiveShadow = true; 
+            
+            // Add mesh to group
+            group.add(mesh);
+            
+            // CRITICAL FIX: If group has no parent, add it to __last_obj
+            if (!group.parent && window.__last_obj) {
+              window.__last_obj.add(group);
+              console.log('FIXED: Added group to __last_obj');
+            }
+            
+            console.log('Mesh added. Group children:', group.children.length);
+            console.log('__last_obj children:', window.__last_obj ? window.__last_obj.children.length : 'no __last_obj');
+          }, undefined, (err)=>{ console.error('STL load error:', err); });
+        } else if (lower.endsWith('.fbx')){
+          const loader = new FBXLoader();
+          loader.load(url, (obj)=>{ attachSpec(obj); }, undefined, (err)=>{ console.error(err); });
+        } else {
+          console.warn('Unsupported external model format:', url);
+        }
+      }catch(err){ console.error(err); }
+    }
+
+    function annotateTopLevel(group, objs){
+      try{
+        if (!group || !Array.isArray(objs)) return;
+        group.children.forEach((child, i)=>{
+          const o = objs[i]; if(!o) return;
+          child.userData = child.userData || {}; child.userData.__spec = o;
+          // Do NOT stamp __spec onto every descendant mesh to preserve their unique materials/colors
+          if (child.userData.__externalUrl){ loadExternalInto(child, o); }
+        });
+      }catch(err){ console.error(err); }
+    }
+
+    function buildRobotHand(params){ const g=new THREE.Group(); const w=params.palmWidth||8.0, d=params.palmDepth||2.0, h=params.palmHeight||10.0; const n=Math.max(1, Math.min(5, params.fingerCount||5)); const L=params.fingerLength||8.0; const palm=new THREE.Mesh(new THREE.BoxGeometry(w,d,h), createMaterial(window.__options.preset||'luminous', {params:{color:params.color||0x9aa7ff}})); palm.castShadow=true; palm.receiveShadow=true; g.add(palm); const jm=new THREE.MeshStandardMaterial({color:0x222a5a, metalness:0.9, roughness:0.3}); const makeSeg=(r0,r1,len)=> new THREE.Mesh(new THREE.CylinderGeometry(r0,r1,len,24), createMaterial(window.__options.preset||'luminous', {params:{color:params.color||0xb9c6ff}})); const makeFinger=(len, baseR)=>{ const f=new THREE.Group(); const seg=len/3; const R=[baseR, baseR*0.9, baseR*0.8]; for(let i=0;i<3;i++){ const s=makeSeg(R[i]*0.9,R[i],seg); s.castShadow=true; s.receiveShadow=true; s.rotation.x=Math.PI/2; s.position.z=i*seg+seg*0.5; f.add(s); if(i<2){ const j=new THREE.Mesh(new THREE.TorusGeometry(R[i]*0.9, Math.max(0.05, baseR*0.15), 12, 24), jm); j.rotation.y=Math.PI/2; j.position.z=(i+1)*seg; f.add(j); } } return f; }; const spacing=w/(n+1), baseR=Math.max(0.15, d*0.22), yBase=(d*0.5)+baseR; for(let i=0;i<n;i++){ const fx=-w/2+spacing*(i+1); const f=makeFinger(L, baseR*(i===0?0.9:1)); f.position.set(fx, yBase, h*0.45); g.add(f); } const thumb=makeFinger(L*0.8, baseR*1.1); thumb.rotation.z=-Math.PI/6; thumb.position.set(-w*0.55, 0, h*0.1); g.add(thumb); return g; }
+
+    function buildBicycle(params){
+      const g = new THREE.Group();
+      const wheelR = params.wheelRadius || 3.0;
+      const tireT = params.tireThickness || 0.4;
+      const base = params.wheelbase || 8.0;
+      const frameH = params.frameHeight || 4.0;
+      const frameColor = params.frameColor || 0xb9c6ff;
+      const preset = window.__options.preset || 'luminous';
+
+      function wheel(){
+      const group = new THREE.Group();
+        const tire = new THREE.Mesh(new THREE.TorusGeometry(wheelR, tireT, 24, 100), createMaterial(preset, { params: { color: 0x20262f } }));
+        tire.castShadow = true; tire.receiveShadow = true; group.add(tire);
+        const spokeCount = 12; const spokeMat = createMaterial(preset, { params: { color: 0xd0d6e2 } });
+        for(let i=0;i<spokeCount;i++){
+          const s = new THREE.Mesh(new THREE.CylinderGeometry(0.03,0.03,wheelR*2-0.6,8), spokeMat);
+          s.rotation.z = Math.PI/2; s.rotation.y = (i/spokeCount)*Math.PI*2; group.add(s);
+        }
+      return group;
+      }
+      const rear = wheel(); rear.position.set(-base/2, 0, 0); g.add(rear);
+      const front = wheel(); front.position.set(base/2, 0, 0); g.add(front);
+
+      // Frame tubes
+      const matFrame = createMaterial(preset, { params: { color: frameColor } });
+      function tube(a, b, r=0.12){
+        const dir = new THREE.Vector3().subVectors(b,a); const len = dir.length();
+        const cyl = new THREE.Mesh(new THREE.CylinderGeometry(r,r,len,24), matFrame);
+        cyl.position.copy(a).addScaledVector(dir, 0.5);
+        cyl.quaternion.setFromUnitVectors(new THREE.Vector3(0,1,0), dir.clone().normalize());
+        cyl.castShadow = true; cyl.receiveShadow = true; g.add(cyl);
+      }
+      const rearHub = new THREE.Vector3(-base/2, 0, 0);
+      const frontHub = new THREE.Vector3(base/2, 0, 0);
+      const seat = new THREE.Vector3(-base/4, frameH, 0);
+      const bb = new THREE.Vector3(-base/4, 0.8, 0);
+      const head = new THREE.Vector3(base/2 - 0.6, frameH*0.9, 0);
+      tube(rearHub, seat); tube(seat, bb); tube(bb, rearHub); tube(seat, head); tube(bb, head);
+      const handle = new THREE.Mesh(new THREE.CylinderGeometry(0.06,0.06,1.4,24), createMaterial(preset, { params: { color: 0xffc06b } })); handle.position.copy(head); handle.rotation.z = Math.PI/2; g.add(handle);
+      const saddle = new THREE.Mesh(new THREE.BoxGeometry(0.9,0.15,0.35), createMaterial(preset, { params: { color: 0x333333 } })); saddle.position.copy(seat).add(new THREE.Vector3(0.2,0.15,0)); g.add(saddle);
+
+      rear.userData.__isWheel = true; front.userData.__isWheel = true; g.userData.__wheels = [rear, front];
+      return g;
+    }
+
+    function buildGear(p){
+      const g = new THREE.Group(); const r=p.radius||1, w=p.width||0.4, teeth=Math.max(6, Math.floor(p.teeth||16));
+      const body = new THREE.Mesh(new THREE.CylinderGeometry(r, r, w, Math.max(24, teeth)), createMaterial(window.__options.preset||'luminous', { params:{ color:p.color } }));
+      body.rotation.x = Math.PI/2; g.add(body);
+      for(let i=0;i<teeth;i++){
+        const t = new THREE.Mesh(new THREE.BoxGeometry(w*0.6, 0.2, 0.6), createMaterial(window.__options.preset||'luminous', { params:{ color:p.toothColor||p.color } }));
+        const a = (i/teeth)*Math.PI*2; t.position.set(Math.cos(a)*(r+0.35), 0, Math.sin(a)*(r+0.35)); t.rotation.y = -a; g.add(t);
+      }
+      return g;
+    }
+    function buildPulley(p){ const g=new THREE.Group(); const r=p.radius||1, t=p.tube||0.2, w=p.width||0.4; const ring=new THREE.Mesh(new THREE.TorusGeometry(r, t, 32, 128), createMaterial(window.__options.preset||'luminous', { params:{ color:p.color } })); ring.rotation.x=Math.PI/2; g.add(ring); const hub=new THREE.Mesh(new THREE.CylinderGeometry(r*0.25, r*0.25, w, 24), createMaterial(window.__options.preset||'luminous', { params:{ color:p.hubColor||0xdddddd } })); hub.rotation.x=Math.PI/2; g.add(hub); return g; }
+    function buildWheel(p){ const g=new THREE.Group(); const r=p.radius||1.2, t=p.tire||0.25; const tire=new THREE.Mesh(new THREE.TorusGeometry(r, t, 24, 100), createMaterial(window.__options.preset||'luminous', { params:{ color:p.tireColor||0x222222 } })); tire.rotation.x=Math.PI/2; g.add(tire); const rim=new THREE.Mesh(new THREE.TorusGeometry(r*0.8, t*0.4, 16, 64), createMaterial(window.__options.preset||'luminous', { params:{ color:p.rimColor||0xd0d6e2 } })); rim.rotation.x=Math.PI/2; g.add(rim); return g; }
+    function buildAxle(p){ const m=createMaterial(window.__options.preset||'luminous', { params:{ color:p.color||0x9aa7ff } }); const mesh=new THREE.Mesh(new THREE.CylinderGeometry(p.radius||0.12, p.radius||0.12, p.length||2.0, 32), m); mesh.rotation.z=Math.PI/2; return mesh; }
+    function buildLever(p){ const m=createMaterial(window.__options.preset||'luminous', { params:{ color:p.color||0xffc06b } }); return new THREE.Mesh(new THREE.BoxGeometry(p.length||2.5, p.thickness||0.2, p.width||0.4), m); }
+    function buildBracket(p){ const g=new THREE.Group(); const m=createMaterial(window.__options.preset||'luminous', { params:{ color:p.color||0x8ea1b5 } }); const a=new THREE.Mesh(new THREE.BoxGeometry(p.size||1.0, p.thickness||0.2, p.width||0.4), m); const b=new THREE.Mesh(new THREE.BoxGeometry(p.thickness||0.2, p.size||1.0, p.width||0.4), m); a.position.x=(p.size||1.0)/2; b.position.y=(p.size||1.0)/2; g.add(a); g.add(b); return g; }
+    function buildPlate(p){ const m=createMaterial(window.__options.preset||'luminous', { params:{ color:p.color||0xdedede } }); return new THREE.Mesh(new THREE.BoxGeometry(p.width||2.0, p.thickness||0.2, p.height||2.0), m); }
+    function buildBeam(p){ const m=createMaterial(window.__options.preset||'luminous', { params:{ color:p.color||0xb9c6ff } }); return new THREE.Mesh(new THREE.BoxGeometry(p.length||4.0, p.thickness||0.3, p.width||0.6), m); }
+    function buildHinge(p){ const g=new THREE.Group(); const pin=new THREE.Mesh(new THREE.CylinderGeometry(p.pinRadius||0.15, p.pinRadius||0.15, p.width||1.0, 24), createMaterial(window.__options.preset||'luminous', { params:{ color:p.pinColor||0x999999 } })); pin.rotation.z=Math.PI/2; g.add(pin); const leafM=createMaterial(window.__options.preset||'luminous', { params:{ color:p.leafColor||0xcccccc } }); const leaf1=new THREE.Mesh(new THREE.BoxGeometry((p.length||1.6), (p.thickness||0.08), (p.width||1.0)), leafM); const leaf2=leaf1.clone(); leaf1.position.y= (p.pinRadius||0.15)+ (p.thickness||0.08)/2; leaf2.position.y= -leaf1.position.y; g.add(leaf1); g.add(leaf2); return g; }
+    function buildSlider(p){ const g=new THREE.Group(); const rail=new THREE.Mesh(new THREE.BoxGeometry(p.length||4.0, p.height||0.2, p.width||0.6), createMaterial(window.__options.preset||'luminous', { params:{ color:p.railColor||0xcccccc } })); const carriage=new THREE.Mesh(new THREE.BoxGeometry(0.8, 0.4, 0.8), createMaterial(window.__options.preset||'luminous', { params:{ color:p.carriageColor||0x6b9cff } })); carriage.position.x = -(p.length||4.0)/4; g.add(rail); g.add(carriage); return g; }
+    function buildBearing(p){ const g=new THREE.Group(); const outer=new THREE.Mesh(new THREE.TorusGeometry(p.radius||1.0, p.tube||0.18, 16, 64), createMaterial(window.__options.preset||'luminous', { params:{ color:p.outerColor||0x8ea1b5 } })); outer.rotation.x=Math.PI/2; g.add(outer); const inner=new THREE.Mesh(new THREE.TorusGeometry((p.radius||1.0)*0.65, (p.tube||0.18)*0.6, 12, 48), createMaterial(window.__options.preset||'luminous', { params:{ color:p.innerColor||0xd0d6e2 } })); inner.rotation.x=Math.PI/2; g.add(inner); return g; }
+    function buildNode(o){ const preset=window.__options.preset||'luminous'; const p=o.params||{}; let node=null; const makeMat=()=>createMaterial(preset, o); switch(o.type){ case 'box': node=new THREE.Mesh(new THREE.BoxGeometry(p.width||1,p.depth||1,p.height||1), makeMat()); break; case 'cylinder': { const top=p.topRadius!==undefined?p.topRadius:(p.radius||1); const bot=p.bottomRadius!==undefined?p.bottomRadius:(p.radius||1); node=new THREE.Mesh(new THREE.CylinderGeometry(top, bot, p.depth||1, Math.max(12, p.segments||48)), makeMat()); break; } case 'sphere': node=new THREE.Mesh(new THREE.SphereGeometry(p.radius||1, Math.max(12,p.widthSegments||48), Math.max(8,p.heightSegments||32)), makeMat()); break; case 'cone': node=new THREE.Mesh(new THREE.ConeGeometry(p.radius||1, p.height||1, Math.max(12,p.segments||48)), makeMat()); break; case 'torus': node=new THREE.Mesh(new THREE.TorusGeometry(p.radius||1, p.tube||0.3, Math.max(8,p.radialSegments||16), Math.max(24,p.tubularSegments||64)), makeMat()); break; case 'torusknot': node=new THREE.Mesh(new THREE.TorusKnotGeometry(p.radius||1, p.tube||0.25, Math.max(48,p.tubularSegments||128), Math.max(12,p.radialSegments||32)), makeMat()); break; case 'plane': node=new THREE.Mesh(new THREE.PlaneGeometry(p.size||1, p.size||1, Math.max(1,p.segments||1), Math.max(1,p.segments||1)), makeMat()); node.receiveShadow=true; break; case 'external_model': node=new THREE.Group(); node.userData.__externalUrl=p.url; break; case 'assembly': { const tpl=(p.template||'group'); if(tpl==='robot_hand') node=buildRobotHand(p); else if(tpl==='bicycle_basic') node=buildBicycle(p); else { node=new THREE.Group(); const children = (o.children||[]); children.forEach(childSpec=>{ const childNode=buildNode(childSpec); if(childNode){ node.add(childNode); } }); } break; } default: node=null; break; } if(node){ const t=o.transform||{}; const pos=t.position||[0,0,0], rot=t.rotation||[0,0,0], scl=t.scale||[1,1,1]; node.position.set(pos[0],pos[1],pos[2]); node.rotation.set(rot[0],rot[1],rot[2]); node.scale.set(scl[0],scl[1],scl[2]); node.userData = node.userData || {}; node.userData.__spec=o; node.traverse(n=>{ if(n.isMesh){ n.castShadow=true; } }); if (node.userData.__externalUrl){ loadExternalInto(node, o); } }
+      return node; }
+    function buildFromSpec(spec){ const group=new THREE.Group(); const objects=(spec&&spec.objects)||[]; objects.forEach((o)=>{ const node=buildNode(o); if(node) group.add(node); }); return group; }
+    window.buildFromSpec = buildFromSpec;
+
+    function clearScene(){ if(!window.__scene||!window.__last_obj) return; window.__scene.remove(window.__last_obj); window.__last_obj.traverse(disposeMeshResources); window.__last_obj=null; setSelected(null); }
+    window.clearScene = ()=>{ if(!window.__viewerReady) return; clearScene(); hideLoading(); };
+
+    // Grid scale labels
+    window.__gridLabels = [];
+    function createGridLabels(size, divisions) {
+      removeGridLabels();
+      if (!window.__scene || !window.__camera) return;
+      
+      const step = size / divisions; // Each step is 1cm when divisions = size
+      const halfSize = size / 2;
+      const labelPositions = [];
+      
+      // Create labels every 10cm for readability
+      const labelInterval = 10; // Label every 10cm
+      
+      // Create labels along X axis (both positive and negative)
+      for (let i = -Math.floor(divisions / 2); i <= Math.floor(divisions / 2); i += labelInterval) {
+        if (i === 0) continue;
+        const pos = i * step;
+        const value = Math.abs(i);
+        if (Math.abs(pos) < halfSize * 0.95) {
+          labelPositions.push({ pos: [pos, 0, -halfSize * 0.9], text: value + 'cm', axis: 'x' });
+        }
+      }
+      
+      // Create labels along Z axis (both positive and negative)
+      for (let i = -Math.floor(divisions / 2); i <= Math.floor(divisions / 2); i += labelInterval) {
+        if (i === 0) continue;
+        const pos = i * step;
+        const value = Math.abs(i);
+        if (Math.abs(pos) < halfSize * 0.95) {
+          labelPositions.push({ pos: [-halfSize * 0.9, 0, pos], text: value + 'cm', axis: 'z' });
+        }
+      }
+      
+      // Create sprite labels
+      labelPositions.forEach(lp => {
+        const sprite = createTextSprite(lp.text, { 
+          fontsize: 32, 
+          backgroundColor: { r: 0, g: 0, b: 0, a: 0.7 },
+          textColor: { r: 255, g: 255, b: 255, a: 1.0 }
+        });
+        sprite.position.set(lp.pos[0], lp.pos[1] + 0.2, lp.pos[2]);
+        sprite.scale.set(2, 1, 1);
+        window.__scene.add(sprite);
+        window.__gridLabels.push(sprite);
+      });
+    }
+    
+    function removeGridLabels() {
+      if (!window.__scene || !window.__gridLabels) return;
+      window.__gridLabels.forEach(label => {
+        window.__scene.remove(label);
+        if (label.material) label.material.dispose();
+        if (label.material && label.material.map) label.material.map.dispose();
+      });
+      window.__gridLabels = [];
+    }
+    
+    function createTextSprite(text, parameters = {}) {
+      const fontface = parameters.fontface || 'Inter, Arial, sans-serif';
+      const fontsize = parameters.fontsize || 18;
+      const backgroundColor = parameters.backgroundColor || { r: 0, g: 0, b: 0, a: 0.5 };
+      const textColor = parameters.textColor || { r: 255, g: 255, b: 255, a: 1.0 };
+      
+      const canvas = document.createElement('canvas');
+      const context = canvas.getContext('2d');
+      canvas.width = 256;
+      canvas.height = 64;
+      
+      context.font = `Bold ${fontsize}px ${fontface}`;
+      context.textAlign = 'center';
+      context.textBaseline = 'middle';
+      
+      // Background
+      context.fillStyle = `rgba(${backgroundColor.r}, ${backgroundColor.g}, ${backgroundColor.b}, ${backgroundColor.a})`;
+      context.fillRect(0, 0, canvas.width, canvas.height);
+      
+      // Text
+      context.fillStyle = `rgba(${textColor.r}, ${textColor.g}, ${textColor.b}, ${textColor.a})`;
+      context.fillText(text, canvas.width / 2, canvas.height / 2);
+      
+      const texture = new THREE.CanvasTexture(canvas);
+      texture.needsUpdate = true;
+      
+      const spriteMaterial = new THREE.SpriteMaterial({ map: texture, transparent: true });
+      const sprite = new THREE.Sprite(spriteMaterial);
+      return sprite;
+    }
+
+    function applyMaterialPreset(preset){ window.__options.preset=preset; if(!window.__last_obj) return; window.__last_obj.traverse(n=>{ if(!n.isMesh) return; const spec=n.userData&&n.userData.__spec; if(!spec) return; const nm=createMaterial(preset, spec); if(n.material){ if(Array.isArray(n.material)) n.material.forEach(m=>m&&m.dispose&&m.dispose()); else if(n.material.dispose) n.material.dispose(); } n.material=nm; n.material.needsUpdate=true; }); }
+    function applyBackground(name){ if(!window.__scene||!window.__renderer) return; const cfg=BACKGROUND_PRESETS[name]||BACKGROUND_PRESETS.night; const color=cfg.color??0x0a0a0a; const cc=new THREE.Color(color); window.__scene.background=cc; window.__renderer.setClearColor(cc,1); window.__scene.fog=cfg.fog?new THREE.Fog(new THREE.Color(cfg.fog.color??color), cfg.fog.near||10, cfg.fog.far||180):null; if(window.__ambientLight) window.__ambientLight.intensity=cfg.ambient??window.__ambientLight.intensity; const exp = window.__options.exposure ?? cfg.exposure ?? window.__renderer.toneMappingExposure; window.__renderer.toneMappingExposure = exp; window.__options.background=name; }
+    function applyOptions(opts){ if(!window.__scene) return; if(typeof opts.spin==='boolean') window.__options.spin=opts.spin; if(typeof opts.grid==='boolean' || typeof opts.gridSize==='number' || typeof opts.gridDiv==='number'){ const enable = (typeof opts.grid==='boolean') ? opts.grid : window.__options.grid; const size = (typeof opts.gridSize==='number') ? opts.gridSize : (window.__options.gridSize||100); const div = (typeof opts.gridDiv==='number') ? opts.gridDiv : (window.__options.gridDiv||100); if(enable){ const needNew = (!window.__gridHelper) || (window.__gridHelper.size!==size) || (window.__gridHelper.divisions!==div); if(needNew){ if(window.__gridHelper){ window.__scene.remove(window.__gridHelper); window.__gridHelper.geometry.dispose(); } const gh=new THREE.GridHelper(size, div, 0x555555, 0x2a2a2a); gh.size=size; gh.divisions=div; window.__gridHelper=gh; window.__scene.add(window.__gridHelper); // Add scale labels to grid
+              createGridLabels(size, div);
+            } } else { if(window.__gridHelper){ window.__scene.remove(window.__gridHelper); window.__gridHelper.geometry.dispose(); window.__gridHelper=null; } // Remove labels
+            removeGridLabels(); } window.__options.grid=enable; window.__options.gridSize=size; window.__options.gridDiv=div; } if(typeof opts.axes==='boolean'){ if(opts.axes && !window.__axesHelper){ window.__axesHelper=new THREE.AxesHelper(1.5); window.__scene.add(window.__axesHelper); } else if(!opts.axes && window.__axesHelper){ window.__scene.remove(window.__axesHelper); window.__axesHelper=null; } window.__options.axes=opts.axes; } if(typeof opts.exposure==='number'){ window.__options.exposure=opts.exposure; if(window.__renderer){ window.__renderer.toneMappingExposure=opts.exposure; } } if(typeof opts.preset==='string' && opts.preset) applyMaterialPreset(opts.preset); if(typeof opts.background==='string' && opts.background) applyBackground(opts.background); }
+    window.updateOptions = opts=>applyOptions(opts||{});
+
+    function applySpec(json, fit){
+      if(!window.__scene) return;
+      showLoading();
+      try{
+        const data = typeof json==='string' ? JSON.parse(json) : json; if(!data) return;
+        window.__spec = data; clearScene(); window.__scene.rotation.set(0,0,0);
+        const group = buildFromSpec(data);
+        if (group){ const objs = (data && data.objects) || []; annotateTopLevel(group, objs); window.__scene.add(group); window.__last_obj = group; applyMaterialPreset(window.__options.preset||'luminous'); if (fit) fitView(); }
+      }catch(e){ console.error(e); }
+      finally { hideLoading(); }
+    }
+    window.loadSpec = (json, fit)=>applySpec(json, fit);
+    window.loadSpecFromPayload = (payload, fit)=>{ try{ const decoded=atob(payload.replace(/-/g,'+').replace(/_/g,'/')); applySpec(decoded, fit); }catch(e){ console.error(e); } };
+
+    // Sandbox: run generated JS code which must define function build(params) { return THREE.Group }
+    function runUserScript(code, params){
+      try{
+        const preset = window.__options && window.__options.preset || 'luminous';
+        const safeCreateMaterial = (presetOrName, objSpec)=>{ try{ return createMaterial(presetOrName||preset, objSpec||{}); }catch(_e){ return new THREE.MeshStandardMaterial({ color:0xffffff }); } };
+        const globals = { THREE, createMaterial: safeCreateMaterial, options: (window.__options||{}), console: { log(){}, warn(){}, error(){} } };
+        // Build a function that executes in a limited scope and returns the 'build' function
+        const wrapper = Function('THREE','createMaterial','options','console', `${code}; return (typeof build==='function') ? build : null;`);
+        const buildFn = wrapper(globals.THREE, globals.createMaterial, globals.options, globals.console);
+        if (typeof buildFn !== 'function'){ throw new Error('No build(params) function exported'); }
+        const group = buildFn(params||{});
+        if (!group || !group.isObject3D){ throw new Error('build() did not return a THREE.Object3D'); }
+        // Replace scene content
+        showLoading();
+        try{
+          clearScene();
+          window.__scene.add(group); window.__last_obj = group; applyMaterialPreset(window.__options.preset||'luminous'); fitView();
+        } finally { hideLoading(); }
+        return true;
+      }catch(err){ console.error('Script run failed:', err); return false; }
+    }
+
+    function fitView(){ if(!window.__last_obj||!window.__camera||!window.__controls) return; const box=new THREE.Box3().setFromObject(window.__last_obj); const size=Math.max(box.getSize(new THREE.Vector3()).length(),0.0001); const center=box.getCenter(new THREE.Vector3()); window.__controls.maxDistance=size*10; window.__camera.near=size/100; window.__camera.far=size*100; window.__camera.updateProjectionMatrix(); window.__camera.position.copy(center); window.__camera.position.x=center.x+size/1.2; window.__camera.position.y=center.y+size/1.2; window.__camera.position.z=center.z+size/1.2; window.__controls.target.copy(center); window.__controls.update(); }
+    window.fit = fitView;
+
+    function updateSpecForNode(node){
+      try{
+        if (!node || !window.__spec) return;
+        const spec = node.userData && node.userData.__spec; if (!spec) return;
+        spec.transform = spec.transform || { position:[0,0,0], rotation:[0,0,0], scale:[1,1,1] };
+        spec.transform.position = [node.position.x, node.position.y, node.position.z];
+        spec.transform.rotation = [node.rotation.x, node.rotation.y, node.rotation.z];
+        spec.transform.scale = [node.scale.x, node.scale.y, node.scale.z];
+        window.parent && window.parent.postMessage({ type:'specUpdated', payload: window.__spec }, '*');
+      }catch(_e){}
+    }
+
+    function getTargetForClean(){
+      if (_selected) return _selected;
+      if (window.__last_obj && window.__last_obj.children && window.__last_obj.children[0]) return window.__last_obj.children[0];
+      return window.__last_obj || null;
+    }
+
+    function recenterNode(target){
+      if (!target) return false;
+      const box = new THREE.Box3().setFromObject(target);
+      const centerWorld = box.getCenter(new THREE.Vector3());
+      const parent = target.parent || window.__scene;
+      if (parent && parent.worldToLocal){
+        const centerLocal = parent.worldToLocal(centerWorld.clone());
+        target.position.sub(centerLocal);
+      } else {
+        target.position.sub(centerWorld);
+      }
+      updateSpecForNode(target); return true;
+    }
+
+    function unitScaleNode(target){
+      if (!target) return false;
+      const box = new THREE.Box3().setFromObject(target);
+      const size = box.getSize(new THREE.Vector3());
+      const maxDim = Math.max(size.x, size.y, size.z);
+      if (!(maxDim > 0)) return false;
+      const factor = 1.0 / maxDim;
+      target.scale.multiplyScalar(factor);
+      updateSpecForNode(target); return true;
+    }
+
+    function setSelected(node){
+      // Debounce: prevent rapid re-selection of same object
+      const now = Date.now();
+      if (node === _selected && now - _lastSelectionTime < 100) {
+        console.log('Ignoring rapid re-selection');
+        return;
+      }
+      _lastSelectionTime = now;
+      
+      // Clear previous selection
+        if (_selected) {
+          _selected.traverse(child => {
+            if (child.material && child.material.emissive) {
+              child.material.emissiveIntensity = 0;
+            }
+          });
+        }
+      
+      _selected = node;
+      
+      const ui=document.getElementById('sel');
+      if(_selected){
+        ui.textContent='Selected (W=move, E=rotate, R=scale)'; 
+        ui.style.display='block';
+        
+        // Highlight
+        _selected.traverse(child => {
+          if(child.material && child.material.emissive) {
+            child.material.emissiveIntensity = 0.4;
+          }
+        });
+        
+        // Attach and show transform controls
+        if (window.__tcontrols){ 
+          window.__tcontrols.attach(_selected);
+          window.__tcontrols.visible = true;
+          window.__tcontrols.setMode(_transformMode); // Use remembered mode instead of always 'translate'
+          window.__transformEnabled = true;
+        }
+      } else {
+        ui.style.display='none'; 
+        if(window.__tcontrols){ 
+          window.__tcontrols.detach();
+          window.__tcontrols.visible = false;
+          window.__transformEnabled = false;
+        }
+      }
+    }
+    
+    function hitTest(clientX, clientY){
+      console.log('hitTest called');
+      if(!window.__camera||!window.__last_obj) {
+        console.log('Missing camera or last_obj');
+        return null;
+      }
+      
+      console.log('__last_obj children count:', window.__last_obj.children.length);
+      window.__last_obj.children.forEach((child, i) => {
+        console.log(`Child ${i}:`, child.type, 'visible:', child.visible, 'children:', child.children.length);
+        if(child.children.length > 0) {
+          child.children.forEach((subchild, j) => {
+            console.log(`  Subchild ${j}:`, subchild.type, 'isMesh:', subchild.isMesh);
+          });
+        }
+      });
+      
+      const canvas=document.getElementById('c'); 
+      const r=canvas.getBoundingClientRect();
+      _ndc.x=((clientX-r.left)/r.width)*2-1; 
+      _ndc.y=-((clientY-r.top)/r.height)*2+1;
+      console.log('NDC coords:', _ndc.x, _ndc.y);
+      _raycaster.setFromCamera(_ndc, window.__camera);
+      
+      // Try raycasting against EVERYTHING in the scene (for debugging)
+      const allHits=_raycaster.intersectObjects(window.__scene.children, true);
+      console.log('Scene-wide raycaster hits:', allHits.length);
+      
+      // Raycast only __last_obj children (exclude transform controls)
+      const hits=_raycaster.intersectObjects(window.__last_obj.children, true);
+      console.log('Raycaster hits from __last_obj:', hits.length);
+      
+      if(hits.length === 0) {
+        // Try direct children only (not recursive)
+        const directHits=_raycaster.intersectObjects(window.__last_obj.children, false);
+        console.log('Direct hits (non-recursive):', directHits.length);
+        return null;
+      }
+      
+      // Filter out any transform control objects
+      let validHit = null;
+      for (let i = 0; i < hits.length; i++) {
+        let obj = hits[i].object;
+        
+        // Walk up to check if this is part of transform controls
+        let isTransformControl = false;
+        let tempObj = obj;
+        while (tempObj) {
+          if (tempObj === window.__tcontrols || tempObj.isTransformControls || 
+              (tempObj.name && tempObj.name.includes('TransformControls'))) {
+            isTransformControl = true;
+            break;
+          }
+          tempObj = tempObj.parent;
+        }
+        
+        if (!isTransformControl) {
+          validHit = obj;
+          break;
+        }
+      }
+      
+      if (!validHit) {
+        console.log('All hits were transform controls');
+        return null;
+      }
+      
+      console.log('First valid hit object:', validHit.type, validHit);
+      
+      // Walk up to find direct child of __last_obj
+      while(validHit.parent && validHit.parent !== window.__last_obj) {
+        validHit = validHit.parent;
+      }
+      
+      console.log('Returning object:', validHit.type, validHit);
+      return validHit;
+    }
+    function listObjects(){ if(!window.__spec) return []; const arr=[]; (window.__spec.objects||[]).forEach((o,i)=>arr.push({id:o.id, type:o.type, index:i})); return arr; }
+    function getSelectedId(){ return _selected && _selected.userData && _selected.userData.__spec ? _selected.userData.__spec.id : null; }
+    function selectById(id){ if(!window.__last_obj) return false; let found=null; window.__last_obj.traverse(n=>{ if(found) return; const s=n.userData && n.userData.__spec; if(s && s.id===id) found=n; }); setSelected(found); return !!found; }
+    function deleteById(id){
+      if(!window.__last_obj) return false;
+      let target=null;
+      window.__last_obj.traverse(n=>{ if(target) return; const s=n.userData && n.userData.__spec; if(s && s.id===id) target=n; });
+      if(!target) return false;
+
+      // Save spec and index for undo
+      const spec = target.userData && target.userData.__spec ? JSON.parse(JSON.stringify(target.userData.__spec)) : null;
+      let indexInSpec = -1;
+      if (spec && window.__spec && Array.isArray(window.__spec.objects)){
+        indexInSpec = window.__spec.objects.findIndex(o=>o.id===spec.id);
+        if(indexInSpec!==-1){ window.__spec.objects.splice(indexInSpec,1); }
+      }
+
+      const parent = target.parent || window.__last_obj;
+      const index = parent.children.indexOf(target);
+      
+      // For STL models and external models, save the actual object for undo
+      const isExternal = spec && (spec.type === 'stl' || spec.type === 'external_model' || spec.type === 'obj');
+      if (isExternal) {
+        // Clone the entire object for undo (preserves geometry)
+        const clonedObj = target.clone(true);
+        pushUndo({ type:'delete', spec:spec, index: indexInSpec>=0? indexInSpec : index, object: clonedObj, parent: parent });
+      } else if (spec) {
+        pushUndo({ type:'delete', spec:spec, index: indexInSpec>=0? indexInSpec : index });
+      }
+
+      parent.remove(target);
+      if(target.traverse) target.traverse(disposeMeshResources);
+      if(_selected && getSelectedId()===id) setSelected(null);
+      // Notify parent about spec change
+      try{ window.parent && window.parent.postMessage({ type:'specUpdated', payload: window.__spec }, '*'); }catch(_e){}
+      return true;
+    }
+    window.listObjects = listObjects; window.getSelectedId = getSelectedId; window.selectById = selectById; window.deleteById = deleteById;
+
+    function findNodeById(id){ if(!window.__last_obj) return null; let found=null; window.__last_obj.traverse(n=>{ if(found) return; const s=n.userData && n.userData.__spec; if(s && s.id===id) found=n; }); return found; }
+    function selectMany(ids){ try{ window.__multiSel = []; ids.forEach(id=>{ const n=findNodeById(id); if(n) window.__multiSel.push(n); }); if(window.__multiSel.length){ setSelected(window.__multiSel[0]); } }catch(_e){} }
+    function groupTemp(){ try{ if(window.__groupWrapper || !window.__multiSel || window.__multiSel.length<2) return; const wrap=new THREE.Group(); wrap.name='__tempGroup'; const parents=[]; window.__multiSel.forEach(n=>{ if(n && n.parent){ parents.push({ node:n, parent:n.parent }); n.userData.__origParent=n.parent; n.parent.remove(n); wrap.add(n); } }); if(parents.length){ (window.__scene||window.__last_obj||window.__scene).add(wrap); window.__groupWrapper=wrap; setSelected(wrap); } }catch(_e){} }
+    function ungroupTemp(){ try{ if(!window.__groupWrapper) return; const wrap=window.__groupWrapper; const kids=[...wrap.children]; kids.forEach(n=>{ const p=n.userData.__origParent; if(p){ wrap.remove(n); p.add(n); delete n.userData.__origParent; } }); if(wrap.parent) wrap.parent.remove(wrap); window.__groupWrapper=null; window.__multiSel = kids; if (kids[0]) setSelected(kids[0]); }catch(_e){} }
+    function setAlignTarget(id){ const n = id ? findNodeById(id) : _selected; if(n) window.__alignTarget = n; }
+    function worldCenterOf(node){ const box=new THREE.Box3().setFromObject(node); return box.getCenter(new THREE.Vector3()); }
+    function alignCenter(nodes){ if(!window.__alignTarget) return; const center=worldCenterOf(window.__alignTarget); nodes.forEach(n=>{ if(!n||n===window.__alignTarget) return; const parent=n.parent||window.__scene; const local=parent.worldToLocal(center.clone()); n.position.copy(local); updateSpecForNode(n); }); }
+    function alignRotation(nodes){ if(!window.__alignTarget) return; const q=window.__alignTarget.getWorldQuaternion(new THREE.Quaternion()); nodes.forEach(n=>{ if(!n||n===window.__alignTarget) return; const parentQ= n.parent ? n.parent.getWorldQuaternion(new THREE.Quaternion()) : new THREE.Quaternion(); const parentQInv = parentQ.clone().invert(); const localQ = parentQInv.multiply(q.clone()); n.quaternion.copy(localQ); updateSpecForNode(n); }); }
+    function alignCoaxial(nodes, axis){ if(!window.__alignTarget) return; const axisIdx = axis==='x'?0: axis==='y'?1: 2; const worldTargetPos = new THREE.Vector3(); window.__alignTarget.getWorldPosition(worldTargetPos); nodes.forEach(n=>{ if(!n||n===window.__alignTarget) return; const parent=n.parent||window.__scene; const localTarget=parent.worldToLocal(worldTargetPos.clone()); const pos=n.position.clone(); if(axisIdx===0) pos.x = localTarget.x; else if(axisIdx===1) pos.y = localTarget.y; else pos.z = localTarget.z; n.position.copy(pos); updateSpecForNode(n); }); }
+
+    window.addEventListener('DOMContentLoaded', ()=>{
+      const canvas=document.getElementById('c');
+      const renderer = new THREE.WebGLRenderer({ canvas, antialias:true, alpha:true, powerPreference:'high-performance' });
+      renderer.shadowMap.enabled = true;
+      renderer.shadowMap.type = THREE.PCFSoftShadowMap;
+      renderer.toneMapping = THREE.ACESFilmicToneMapping; renderer.setPixelRatio(window.devicePixelRatio||1); renderer.outputColorSpace=THREE.SRGBColorSpace; renderer.toneMapping=THREE.ACESFilmicToneMapping; renderer.toneMappingExposure=1.05; renderer.shadowMap.enabled=true; renderer.shadowMap.type=THREE.PCFSoftShadowMap;
+      const scene=new THREE.Scene(); scene.background=new THREE.Color(0x0a0a0a);
+      const camera = new THREE.PerspectiveCamera(55, canvas.clientWidth/canvas.clientHeight, 0.1, 1000); camera.position.set(2,2,2);
+      const controls = new OrbitControls(camera, renderer.domElement);
+      controls.enableDamping = true;
+      controls.dampingFactor = 0.05;
+      controls.screenSpacePanning = true;  // Enable panning (left/right/up/down movement)
+      controls.minDistance = 0.5;
+      controls.maxDistance = 500;
+      // Removed maxPolarAngle restriction to allow full 360° rotation
+      controls.keys = { LEFT: 'ArrowLeft', UP: 'ArrowUp', RIGHT: 'ArrowRight', BOTTOM: 'ArrowDown' };
+      controls.listenToKeyEvents(window);
+      const tcontrols=new TransformControls(camera, canvas); 
+      tcontrols.setSize(0.9); 
+      tcontrols.visible = false;  // Start hidden
+      scene.add(tcontrols);
+      tcontrols.addEventListener('dragging-changed', (e)=>{
+        controls.enabled = !e.value;
+        try{
+          // When dragging starts, save previous transform to undo stack
+          if (e.value && _selected){
+            const id = getSelectedId();
+            if (id){
+              const before = { position:[_selected.position.x, _selected.position.y, _selected.position.z], rotation:[_selected.rotation.x, _selected.rotation.y, _selected.rotation.z], scale:[_selected.scale.x, _selected.scale.y, _selected.scale.z] };
+              pushUndo({ type:'transform', id, before });
+            }
+          }
+        }catch(_e){}
+      });
+      tcontrols.addEventListener('change', ()=>{
+        // Sync current selection back to spec
+        try{
+          if (!_selected || !window.__spec) return;
+          const spec = _selected.userData && _selected.userData.__spec; if (!spec) return;
+          spec.transform = spec.transform || { position:[0,0,0], rotation:[0,0,0], scale:[1,1,1] };
+          spec.transform.position = [_selected.position.x, _selected.position.y, _selected.position.z];
+          spec.transform.rotation = [_selected.rotation.x, _selected.rotation.y, _selected.rotation.z];
+          spec.transform.scale = [_selected.scale.x, _selected.scale.y, _selected.scale.z];
+          window.parent && window.parent.postMessage({ type:'specUpdated', payload: window.__spec }, '*');
+        }catch(_err){}
+      });
+      window.__tcontrols = tcontrols;
+      const keyLight=new THREE.DirectionalLight(0xffffff,1.05); keyLight.position.set(6,7,6); keyLight.castShadow=true; keyLight.shadow.mapSize.set(2048,2048); keyLight.shadow.camera.near=0.5; keyLight.shadow.camera.far=50; scene.add(keyLight);
+      const rimLight=new THREE.DirectionalLight(0xffffff,0.35); rimLight.position.set(-4,3,-5); scene.add(rimLight);
+      const ambient=new THREE.AmbientLight(0xffffff,0.25); scene.add(ambient);
+      const ground=new THREE.Mesh(new THREE.PlaneGeometry(200,200), new THREE.ShadowMaterial({opacity:0.18})); ground.rotation.x=-Math.PI/2; ground.position.y=-0.001; ground.receiveShadow=true; scene.add(ground);
+      window.__renderer=renderer; window.__scene=scene; window.__camera=camera; window.__controls=controls; window.__ambientLight=ambient; window.__lights={key:keyLight, rim:rimLight};
+      function resize(){ const w=canvas.clientWidth, h=canvas.clientHeight; renderer.setSize(w,h,false); camera.aspect=w/Math.max(h,1); camera.updateProjectionMatrix(); }
+      window.addEventListener('resize', resize); resize(); window.__viewerReady=true;
+      try{ window.parent && window.parent.postMessage({ type:'viewer_ready' }, '*'); }catch(_e){}
+      const params=new URLSearchParams(window.location.search); const pGrid=params.get('grid')==='1'; const pAxes=params.get('axes')==='1'; const pSpin=params.get('spin')==='1'; const doFit=params.get('fit')==='1'; const pPreset=params.get('preset'); const pBg=params.get('background'); applyBackground(pBg||window.__options.background); applyMaterialPreset(pPreset||window.__options.preset); applyOptions({grid:pGrid, axes:pAxes, spin:pSpin}); const specB64=params.get('spec_b64'); if(specB64) window.loadSpecFromPayload(specB64, doFit); else hideLoading();
+      canvas.addEventListener('pointerdown', (e)=>{ 
+        // Ignore clicks if transform controls are being dragged
+        if (window.__tcontrols && window.__tcontrols.dragging) {
+          console.log('Ignoring click - transform controls dragging');
+          return;
+        }
+        
+        console.log('CLICK DETECTED at', e.clientX, e.clientY);
+        const n=hitTest(e.clientX, e.clientY); 
+        console.log('hitTest returned:', n);
+        if (e.shiftKey || e.ctrlKey){ 
+          try{ 
+            if(n && n.userData && n.userData.__spec && window.parent){ 
+              const id=n.userData.__spec.id; 
+              window.parent.postMessage({ type:'toggleSelect', id }, '*'); 
+            } 
+          }catch(_e){} 
+        } else { 
+          console.log('Calling setSelected with:', n);
+          setSelected(n); 
+        } 
+      });
+      window.addEventListener('keydown', (e)=>{
+        try{
+          if (!window.__viewerReady) return;
+          const k = e.key.toLowerCase();
+          if (k==='w'){ 
+            _transformMode = 'translate'; // Remember mode
+            if(window.__tcontrols && _selected){ 
+              window.__tcontrols.setMode('translate'); 
+              window.__tcontrols.visible = true;
+              window.__transformEnabled=true; 
+              window.__tcontrols.attach(_selected); 
+            } 
+          }
+          else if (k==='e'){ 
+            _transformMode = 'rotate'; // Remember mode
+            if(window.__tcontrols && _selected){ 
+              window.__tcontrols.setMode('rotate'); 
+              window.__tcontrols.visible = true;
+              window.__transformEnabled=true; 
+              window.__tcontrols.attach(_selected); 
+            } 
+          }
+          else if (k==='r'){ 
+            _transformMode = 'scale'; // Remember mode
+            if(window.__tcontrols && _selected){ 
+              window.__tcontrols.setMode('scale'); 
+              window.__tcontrols.visible = true;
+              window.__transformEnabled=true; 
+              window.__tcontrols.attach(_selected); 
+            } 
+          }
+          else if (k==='f'){ fitView(); }
+          else if (k==='delete' || k==='backspace'){ const id=getSelectedId(); if(id){ if(deleteById(id)){ window.parent && window.parent.postMessage({ type:'specUpdated', payload: window.__spec }, '*'); } } }
+          else if (e.ctrlKey && k==='d'){ const id=getSelectedId(); if(id){ window.parent && window.parent.postMessage({ type:'requestDuplicate', id }, '*'); e.preventDefault(); } }
+        }catch(_e){}
+      });
+      (function render(){
+        // Parallax disabled to avoid unintended motion
+        if(window.__options.spin && window.__scene){
+          window.__scene.rotation.y+=0.003;
+          if (window.__last_obj){
+            window.__last_obj.traverse(n=>{ if(n.userData && n.userData.__wheels){ n.userData.__wheels.forEach(w=>{ w.rotation.x += 0.05; }); } });
+          }
+        }
+        controls.update(); renderer.render(scene, camera); requestAnimationFrame(render);
+      })();
+      
+      // DEBUG: Confirm viewer script is running
+      console.log('[VIEWER INIT] Viewer script loaded and running!');
+      console.log('[VIEWER INIT] Setting up message listener...');
+      
+      window.addEventListener('message', (evt)=>{ 
+        const msg = evt && evt.data; 
+        if(!msg) return;
+        console.log('[VIEWER] Received message:', msg.type || msg.action, msg);
+        
+        // Send confirmation back to parent
+        try {
+          window.parent.postMessage({ 
+            type: 'viewer_debug', 
+            message: 'Viewer received: ' + (msg.type || msg.action) 
+          }, '*');
+        } catch(e) {}
+        
+        // Handle loadSTL action from parent window
+        if (msg.action === 'loadSTL' && msg.url) {
+          console.log('[VIEWER] Processing loadSTL for URL:', msg.url);
+          try{
+            showLoading();
+            clearScene();
+            const loader = new STLLoader();
+            loader.load(msg.url, (geometry)=>{
+              try{
+                console.log('STL loaded via message handler!');
+                const material = createMaterial(window.__options.preset||'luminous', {});
+                const mesh = new THREE.Mesh(geometry, material);
+                mesh.scale.set(0.1, 0.1, 0.1);  // 10x larger: 10mm = 1 unit
+                mesh.castShadow = true;
+                mesh.receiveShadow = true;
+                mesh.userData.__spec = {id: 'cadquery_model', type: 'stl'};
+                
+                // CRITICAL FIX: Wrap mesh in a group so hitTest can find it
+                const group = new THREE.Group();
+                group.userData.__spec = {id: 'cadquery_model', type: 'stl'};  // Add spec to group for undo
+                group.add(mesh);
+                window.__scene.add(group);
+                window.__last_obj = group;  // Set group as __last_obj, not mesh
+                
+                console.log('Mesh added to group. __last_obj children:', window.__last_obj.children.length);
+                fitView();
+                // Restore grid if it was enabled
+                if (window.__options.grid && !window.__gridHelper) {
+                  applyOptions({ grid: true });
+                }
+                hideLoading();
+              }catch(err){ console.error('Error creating mesh:', err); hideLoading(); }
+            }, undefined, (err)=>{ console.error('Error loading STL:', err); hideLoading(); });
+          }catch(err){ console.error('Error in loadSTL handler:', err); hideLoading(); }
+          return;
+        }
+        
+        // Handle loadMultipleSTL action - load each object as separate mesh for individual selection
+        if (msg.action === 'loadMultipleSTL' && msg.objects && Array.isArray(msg.objects)) {
+          try{
+            showLoading();
+            clearScene();
+            
+            const loader = new STLLoader();
+            const material = createMaterial(window.__options.preset||'luminous', {});
+            
+            // Create a parent group to hold all objects
+            const container = new THREE.Group();
+            window.__scene.add(container);
+            window.__last_obj = container;
+            
+            let loadedCount = 0;
+            const totalCount = msg.objects.length;
+            
+            console.log(`Loading ${totalCount} separate objects...`);
+            
+            // Load each STL as a separate mesh
+            msg.objects.forEach((objData, index) => {
+              loader.load(objData.url, (geometry) => {
+                try {
+                  const mesh = new THREE.Mesh(geometry, material.clone());
+                  mesh.scale.set(0.1, 0.1, 0.1);  // 10x larger
+                  mesh.castShadow = true;
+                  mesh.receiveShadow = true;
+                  mesh.userData.__spec = {
+                    id: objData.name || `object_${index}`,
+                    type: 'stl',
+                    index: index
+                  };
+                  mesh.name = objData.name || `object_${index}`;
+                  
+                  // Add mesh directly to container (each can be selected individually)
+                  container.add(mesh);
+                  
+                  loadedCount++;
+                  console.log(`Loaded ${objData.name} (${loadedCount}/${totalCount})`);
+                  
+                  if (loadedCount === totalCount) {
+                    // All objects loaded!
+                    console.log(`All ${totalCount} objects loaded. Container children: ${container.children.length}`);
+                    fitView();
+                    if (window.__options.grid && !window.__gridHelper) {
+                      applyOptions({ grid: true });
+                    }
+                    hideLoading();
+                  }
+                } catch(err) { 
+                  console.error(`Error creating mesh for ${objData.name}:`, err); 
+                }
+              }, undefined, (err) => {
+                console.error(`Error loading ${objData.name}:`, err);
+                loadedCount++;
+                if (loadedCount === totalCount) hideLoading();
+              });
+            });
+            
+          }catch(err){ console.error('Error in loadMultipleSTL handler:', err); hideLoading(); }
+          return;
+        }
+        
+        // Handle loadOBJ action from parent window
+        if (msg.action === 'loadOBJ' && msg.url) {
+          try{
+            showLoading();
+            clearScene();
+            const loader = new OBJLoader();
+            loader.load(msg.url, (obj)=>{
+              try{
+                const material = createMaterial(window.__options.preset||'luminous', {});
+                obj.traverse((node)=>{
+                  if (node.isMesh) {
+                    if (!node.material) {
+                      node.material = material.clone();
+                    }
+                    node.castShadow = true;
+                    node.receiveShadow = true;
+                    node.userData.__spec = {id: 'imported_obj', type: 'obj'};
+                  }
+                });
+                window.__scene.add(obj);
+                window.__last_obj = obj;
+                fitView();
+                // Restore grid if it was enabled
+                if (window.__options.grid && !window.__gridHelper) {
+                  applyOptions({ grid: true });
+                }
+                hideLoading();
+              }catch(err){ console.error('Error creating OBJ mesh:', err); hideLoading(); }
+            }, undefined, (err)=>{ console.error('Error loading OBJ:', err); hideLoading(); });
+          }catch(err){ console.error('Error in loadOBJ handler:', err); hideLoading(); }
+          return;
+        }
+        
+        // Handle setOptions action to enable grid
+        if (msg.action === 'setOptions' && msg.options) {
+          try{
+            applyOptions(msg.options);
+          }catch(err){ console.error('Error in setOptions handler:', err); }
+          return;
+        }
+        
+        // Handle undo action from parent window
+        if (msg.type === 'undo') {
+          try{
+            const action = popUndo();
+            if(!action) return;
+            if(action.type === 'transform'){
+              const node = findNodeById(action.id);
+              if(node){
+                node.position.set(action.before.position[0], action.before.position[1], action.before.position[2]);
+                node.rotation.set(action.before.rotation[0], action.before.rotation[1], action.before.rotation[2]);
+                node.scale.set(action.before.scale[0], action.before.scale[1], action.before.scale[2]);
+                updateSpecForNode(node);
+              }
+            } else if(action.type === 'delete'){
+              // If we have a cloned object (STL/external models), restore it directly
+              if (action.object) {
+                const parent = action.parent || window.__last_obj || window.__scene;
+                parent.add(action.object);
+                updateSpecForNode(action.object);
+                fitView();
+                try{ window.parent && window.parent.postMessage({ type:'specUpdated', payload: window.__spec }, '*'); }catch(_e){}
+              } else {
+                // Otherwise rebuild from spec (for procedural objects)
+                const spec = action.spec;
+                if(spec){
+                  const node = buildNode(spec);
+                  if(node){
+                    const parent = window.__last_obj || window.__scene;
+                    parent.add(node);
+                    try{
+                      if(!window.__spec) window.__spec = { objects: [] };
+                      const idx = (typeof action.index === 'number' && action.index>=0) ? action.index : window.__spec.objects.length;
+                      window.__spec.objects.splice(idx, 0, spec);
+                    }catch(_e){}
+                    updateSpecForNode(node);
+                    fitView();
+                    try{ window.parent && window.parent.postMessage({ type:'specUpdated', payload: window.__spec }, '*'); }catch(_e){}
+                  }
+                }
+              }
+            }
+            updateUndoButtonState();
+          }catch(err){ console.error('Undo failed', err); }
+          return;
+        }
+        
+        if (msg.type === 'spec') { try { const data = typeof msg.payload === 'string' ? JSON.parse(msg.payload) : msg.payload; applySpec(data, !!msg.fit); } catch(err){ console.error(err); } } else if (msg.type === 'options') { applyOptions(msg.payload || {}); } else if (msg.type === 'clear') { clearScene(); } else if (msg.type === 'fit') { fitView(); } else if (msg.type === 'select') { if (msg.id) selectById(msg.id); } else if (msg.type === 'select_many') { try{ const ids = (msg.ids||[]).filter(Boolean); selectMany(ids); }catch(err){ console.error(err); } } else if (msg.type === 'group_temp') { groupTemp(); } else if (msg.type === 'ungroup_temp') { ungroupTemp(); } else if (msg.type === 'set_align_target') { setAlignTarget(msg.id); } else if (msg.type === 'align_center') { try{ const ids=(msg.ids||[]).filter(Boolean); const nodes=ids.map(id=>findNodeById(id)).filter(Boolean); alignCenter(nodes); }catch(err){ console.error(err); } } else if (msg.type === 'align_rotation') { try{ const ids=(msg.ids||[]).filter(Boolean); const nodes=ids.map(id=>findNodeById(id)).filter(Boolean); alignRotation(nodes); }catch(err){ console.error(err); } } else if (msg.type === 'align_coaxial') { try{ const ids=(msg.ids||[]).filter(Boolean); const nodes=ids.map(id=>findNodeById(id)).filter(Boolean); const axis=(msg.axis||'z'); alignCoaxial(nodes, axis); }catch(err){ console.error(err); } } else if (msg.type === 'transform') { if (window.__tcontrols){ if (msg.mode) { window.__tcontrols.setMode(msg.mode); window.__transformEnabled = true; } if (typeof msg.enabled==='boolean'){ window.__transformEnabled = !!msg.enabled; if(msg.enabled && _selected){ window.__tcontrols.attach(_selected);} else { window.__tcontrols.detach(); } } } } else if (msg.type === 'snap') { try { if (window.__tcontrols){ const s = msg.payload || {}; if (typeof s.translate === 'number') window.__tcontrols.setTranslationSnap(s.translate || null); if (typeof s.rotate === 'number') window.__tcontrols.setRotationSnap((s.rotate||0) * Math.PI/180); if (typeof s.scale === 'number') window.__tcontrols.setScaleSnap(s.scale || null); } } catch(err){ console.error(err); } } else if (msg.type === 'run_script') { try{ const code = String(msg.code||''); if(code) runUserScript(code, {}); }catch(err){ console.error(err);} } else if (msg.type === 'clean') { try { const target = getTargetForClean(); if (!target) return; const m = String(msg.mode||'').toLowerCase(); if (m==='recenter') recenterNode(target); else if (m==='unitscale' || m==='unit_scale') unitScaleNode(target); } catch(err){ console.error(err); } } else if (msg.type === 'update_object') { try { const id = msg.id; if (!id || !window.__last_obj) return; let target=null; window.__last_obj.traverse(n=>{ if(target) return; const s=n.userData && n.userData.__spec; if(s && s.id===id) target=n; }); if(!target) return; const up = msg.payload||{}; if (up.transform){ const t=up.transform; if (t.position){ target.position.set(t.position[0],t.position[1],t.position[2]); } if (t.rotation){ target.rotation.set(t.rotation[0],t.rotation[1],t.rotation[2]); } if (t.scale){ target.scale.set(t.scale[0],t.scale[1],t.scale[2]); } } if (up.color){ if (target.material){ if (Array.isArray(target.material)) target.material.forEach(m=>m && m.color && m.color.set(up.color)); else if (target.material.color) target.material.color.set(up.color); } target.traverse(n=>{ if(n.isMesh && n.material && n.material.color) n.material.color.set(up.color); }); } updateSpecForNode(target); } catch(err){ console.error(err); } } else if (msg.type === 'export_selected') { try { const target = _selected || window.__last_obj; if(!target){ console.warn('No object to export'); return; } 
+              const format = msg.format || 'glb';
+              
+              // Bake world-space geometry so export matches viewer appearance
+              const baked = new THREE.Group();
+              target.traverse((n)=>{
+                if(!n.isMesh) return;
+                try{
+                  if(!n.geometry) return;
+                  const geom = n.geometry.clone();
+                  n.updateWorldMatrix(true, false);
+                  const wm = n.matrixWorld.clone();
+                  geom.applyMatrix4(wm);
+                  let mat = null;
+                  if(n.material){
+                    mat = Array.isArray(n.material) ? n.material.map(m=>m.clone()) : n.material.clone();
+                  } else {
+                    mat = new THREE.MeshStandardMaterial({ color:0xdddddd });
+                  }
+                  const mx = new THREE.Mesh(geom, mat);
+                  mx.position.set(0,0,0); mx.rotation.set(0,0,0); mx.scale.set(1,1,1); mx.updateMatrix();
+                  baked.add(mx);
+                }catch(_e){ console.warn('Failed to bake mesh', _e); }
+              });
+              
+              if (format === 'stl') {
+                // STL export - combine all geometries
+                try {
+                  const mergedGeom = new THREE.BufferGeometry();
+                  const positions = [];
+                  baked.traverse((n)=>{
+                    if(n.isMesh && n.geometry){
+                      const pos = n.geometry.attributes.position;
+                      for(let i=0; i<pos.count; i++){
+                        positions.push(pos.getX(i), pos.getY(i), pos.getZ(i));
+                      }
+                    }
+                  });
+                  mergedGeom.setAttribute('position', new THREE.Float32BufferAttribute(positions, 3));
+                  mergedGeom.computeVertexNormals();
+                  
+                  // Generate STL string
+                  const vertices = mergedGeom.attributes.position;
+                  const normals = mergedGeom.attributes.normal;
+                  let stl = 'solid exported\n';
+                  for(let i=0; i<vertices.count; i+=3){
+                    const nx = normals.getX(i);
+                    const ny = normals.getY(i);
+                    const nz = normals.getZ(i);
+                    stl += `  facet normal ${nx} ${ny} ${nz}\n`;
+                    stl += '    outer loop\n';
+                    for(let j=0; j<3; j++){
+                      const idx = i+j;
+                      const x = vertices.getX(idx);
+                      const y = vertices.getY(idx);
+                      const z = vertices.getZ(idx);
+                      stl += `      vertex ${x} ${y} ${z}\n`;
+                    }
+                    stl += '    endloop\n';
+                    stl += '  endfacet\n';
+                  }
+                  stl += 'endsolid exported\n';
+                  
+                  const blob = new Blob([stl], { type:'text/plain' });
+                  const url = URL.createObjectURL(blob);
+                  const a = document.createElement('a');
+                  a.href=url;
+                  a.download = (target.userData && target.userData.__spec && target.userData.__spec.id ? target.userData.__spec.id : 'model') + '.stl';
+                  document.body.appendChild(a);
+                  a.click();
+                  a.remove();
+                  URL.revokeObjectURL(url);
+                }catch(err){ console.error('STL export failed', err); }
+              } else {
+                // GLB export (default)
+                try {
+                  const exporter = new GLTFExporter();
+                  exporter.parse(baked, (res)=>{ try{ const blob = new Blob([res], { type:'model/gltf-binary' }); const url = URL.createObjectURL(blob); const a = document.createElement('a'); a.href=url; a.download = (target.userData && target.userData.__spec && target.userData.__spec.id ? target.userData.__spec.id : 'model') + '.glb'; document.body.appendChild(a); a.click(); a.remove(); URL.revokeObjectURL(url); }catch(err){ console.error('Export save failed', err); } }, (err)=>{ console.error('Export failed', err); }, { binary:true });
+                } catch(err){ console.error('GLB export failed', err); }
+              }
+            } catch(err){ console.error(err); } }
+      });  // Close the message event listener
+      
+      // Initialize Undo button behavior
+      try{
+        const undoBtnEl = document.getElementById('undoBtn');
+        if(undoBtnEl){
+          updateUndoButtonState();
+          undoBtnEl.addEventListener('click', ()=>{
+            const action = popUndo();
+            if(!action) return;
+            try{
+              if(action.type === 'transform'){
+                const node = findNodeById(action.id);
+                if(node){
+                  node.position.set(action.before.position[0], action.before.position[1], action.before.position[2]);
+                  node.rotation.set(action.before.rotation[0], action.before.rotation[1], action.before.rotation[2]);
+                  node.scale.set(action.before.scale[0], action.before.scale[1], action.before.scale[2]);
+                  updateSpecForNode(node);
+                }
+              } else if(action.type === 'delete'){
+                // If we have a cloned object (STL/external models), restore it directly
+                if (action.object) {
+                  const parent = action.parent || window.__last_obj || window.__scene;
+                  parent.add(action.object);
+                  updateSpecForNode(action.object);
+                  fitView();
+                  try{ window.parent && window.parent.postMessage({ type:'specUpdated', payload: window.__spec }, '*'); }catch(_e){}
+                } else {
+                  // Otherwise rebuild from spec (for procedural objects)
+                  const spec = action.spec;
+                  if(spec){
+                    const node = buildNode(spec);
+                    if(node){
+                      const parent = window.__last_obj || window.__scene;
+                      parent.add(node);
+                      // insert spec back into window.__spec.objects if present
+                      try{
+                        if(!window.__spec) window.__spec = { objects: [] };
+                        const idx = (typeof action.index === 'number' && action.index>=0) ? action.index : window.__spec.objects.length;
+                        window.__spec.objects.splice(idx, 0, spec);
+                      }catch(_e){}
+                      updateSpecForNode(node);
+                      fitView();
+                      try{ window.parent && window.parent.postMessage({ type:'specUpdated', payload: window.__spec }, '*'); }catch(_e){}
+                    }
+                  }
+                }
+              }
+            }catch(err){ console.error('Undo failed', err); }
+            updateUndoButtonState();
+          });
+        }
+      }catch(_e){}
+      
+      // DEBUG: Signal that viewer is fully loaded and ready
+      console.log('[VIEWER INIT] Message listener fully configured and ready!');
+      try {
+        window.parent.postMessage({ type: 'viewer_ready', timestamp: Date.now() }, '*');
+      } catch(e) {
+        console.error('[VIEWER INIT] Failed to send ready message to parent:', e);
+      }
+    });
+  </script>
+  <script>
+    // ISOLATED DEBUG: This runs in a separate script block to ensure it executes
+    console.log('=== VIEWER.HTML LOADED ===');
+    console.log('viewer.html timestamp:', new Date().toISOString());
+    window.__viewerLoaded = true;
+  </script>
+</body>
+</html>

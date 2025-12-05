@@ -1,0 +1,2954 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>FLUDO - AI-Powered 3D Modeling</title>
+    <link href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700&display=swap" rel="stylesheet">
+    <style>
+        * {
+            margin: 0;
+            padding: 0;
+            box-sizing: border-box;
+        }
+        
+        :root {
+            --bg-primary: #ffffff;
+            --bg-secondary: #f8f9fa;
+            --bg-tertiary: #f1f3f5;
+            --accent-primary: #6366f1;
+            --accent-secondary: #8b5cf6;
+            --accent-success: #10b981;
+            --accent-warning: #f59e0b;
+            --accent-error: #ef4444;
+            --text-primary: #1f2937;
+            --text-secondary: #4b5563;
+            --text-muted: #9ca3af;
+            --border-color: #e5e7eb;
+            --shadow-sm: 0 1px 3px rgba(0,0,0,0.1);
+            --shadow-md: 0 4px 6px rgba(0,0,0,0.1);
+            --shadow-lg: 0 10px 15px rgba(0,0,0,0.15);
+            --glow: 0 0 20px rgba(99, 102, 241, 0.3);
+        }
+
+        /* Dark Mode */
+        body.dark-mode {
+            --bg-primary: #0a0a0f;
+            --bg-secondary: #13131a;
+            --bg-tertiary: #1a1a24;
+            --text-primary: #e5e7eb;
+            --text-secondary: #9ca3af;
+            --text-muted: #6b7280;
+            --border-color: #2a2a35;
+            --shadow-sm: 0 1px 3px rgba(0,0,0,0.5);
+            --shadow-md: 0 4px 6px rgba(0,0,0,0.5);
+            --shadow-lg: 0 10px 15px rgba(0,0,0,0.6);
+        }
+
+        body.dark-mode .header {
+            background: linear-gradient(135deg, #13131a 0%, #1a1a24 100%);
+        }
+
+        body.dark-mode .viewer-pane {
+            background: #0f0f15;
+        }
+
+        body.dark-mode .viewer-toolbar {
+            background: rgba(26, 26, 36, 0.8);
+        }
+
+        body.dark-mode .monaco-editor {
+            --vscode-editor-background: #0a0a0f !important;
+            --vscode-editor-foreground: #e5e7eb !important;
+        }
+        
+        body {
+            font-family: 'Inter', -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif;
+            background: var(--bg-primary);
+            color: var(--text-primary);
+            overflow: hidden;
+            height: 100vh;
+        }
+        
+        /* Main Container */
+        .app-container {
+            display: grid;
+            grid-template-columns: var(--sidebar-left-width, 168px) var(--editor-width, 360px) 1fr var(--sidebar-right-width, 277px);
+            grid-template-rows: 56px 1fr;
+            height: 100vh;
+            gap: 0;
+            position: relative;
+        }
+        
+        /* Resizer handles */
+        .resizer {
+            position: absolute;
+            background: rgba(99, 102, 241, 0.2);
+            z-index: 999;
+            transition: all 0.2s ease;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+        }
+        
+        .resizer::after {
+            content: '⋮';
+            color: rgba(99, 102, 241, 0.5);
+            font-size: 14px;
+            letter-spacing: -2px;
+            pointer-events: none;
+        }
+        
+        .resizer:hover {
+            background: rgba(99, 102, 241, 0.5);
+            width: 6px !important;
+        }
+        
+        .resizer:hover::after {
+            color: rgba(255, 255, 255, 0.8);
+        }
+        
+        .resizer.resizing {
+            background: rgba(99, 102, 241, 0.7);
+            width: 6px !important;
+        }
+        
+        .resizer.resizing::after {
+            color: rgba(255, 255, 255, 1);
+        }
+        
+        .resizer-left {
+            top: 56px;
+            bottom: 36px;
+            left: var(--sidebar-left-width, 168px);
+            width: 4px;
+            cursor: ew-resize;
+        }
+        
+        .resizer-editor {
+            top: 56px;
+            bottom: 36px;
+            left: calc(var(--sidebar-left-width, 168px) + var(--editor-width, 360px));
+            width: 4px;
+            cursor: ew-resize;
+        }
+        
+        .resizer-right {
+            top: 56px;
+            bottom: 36px;
+            right: var(--sidebar-right-width, 277px);
+            width: 4px;
+            cursor: ew-resize;
+        }
+        
+        .resizer-horizontal {
+            display: none; /* Hide the old horizontal resizer - no longer needed */
+        }
+        
+        /* Header */
+        .header {
+            grid-column: 1 / -1;
+            background: linear-gradient(135deg, #ffffff 0%, #f8f9fa 100%);
+            border-bottom: 1px solid var(--border-color);
+            display: flex;
+            align-items: center;
+            justify-content: space-between;
+            padding: 0 20px;
+            box-shadow: var(--shadow-md);
+            z-index: 100;
+        }
+        
+        .header-left {
+            display: flex;
+            align-items: center;
+            gap: 24px;
+        }
+        
+        .logo {
+            display: flex;
+            align-items: center;
+            gap: 10px;
+            font-size: 18px;
+            font-weight: 700;
+            background: linear-gradient(135deg, var(--accent-primary), var(--accent-secondary));
+            -webkit-background-clip: text;
+            -webkit-text-fill-color: transparent;
+            background-clip: text;
+        }
+        
+        .logo-icon {
+            width: 32px;
+            height: 32px;
+            background: linear-gradient(135deg, var(--accent-primary), var(--accent-secondary));
+            border-radius: 8px;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            color: white;
+            font-weight: 700;
+            box-shadow: var(--glow);
+        }
+        
+        .nav-tabs {
+            display: flex;
+            gap: 4px;
+        }
+        
+        .nav-tab {
+            padding: 8px 16px;
+            border-radius: 6px;
+            font-size: 13px;
+            font-weight: 500;
+            cursor: pointer;
+            transition: all 0.2s;
+            color: var(--text-secondary);
+        }
+        
+        .nav-tab:hover {
+            background: rgba(99, 102, 241, 0.1);
+            color: var(--accent-primary);
+        }
+        
+        .nav-tab.active {
+            background: rgba(99, 102, 241, 0.15);
+            color: var(--accent-primary);
+        }
+        
+        .header-actions {
+            display: flex;
+            align-items: center;
+            gap: 12px;
+        }
+
+        .theme-toggle {
+            width: 36px;
+            height: 36px;
+            border-radius: 8px;
+            border: 1px solid var(--border-color);
+            background: var(--bg-secondary);
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            cursor: pointer;
+            transition: all 0.3s cubic-bezier(0.4, 0, 0.2, 1);
+            color: var(--text-secondary);
+            padding: 0;
+        }
+
+        .theme-toggle:hover {
+            background: var(--bg-tertiary);
+            border-color: var(--accent-primary);
+            color: var(--accent-primary);
+            transform: rotate(15deg);
+        }
+
+        body.dark-mode .theme-toggle .sun-icon {
+            display: none;
+        }
+
+        body.dark-mode .theme-toggle .moon-icon {
+            display: block !important;
+        }
+        
+        .icon-btn {
+            width: 36px;
+            height: 36px;
+            border-radius: 8px;
+            border: 1px solid var(--border-color);
+            background: var(--bg-secondary);
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            cursor: pointer;
+            transition: all 0.2s;
+            color: var(--text-secondary);
+        }
+        
+        .icon-btn:hover {
+            background: var(--bg-tertiary);
+            border-color: var(--accent-primary);
+            color: var(--accent-primary);
+            box-shadow: var(--glow);
+        }
+        
+        .btn-primary {
+            padding: 8px 20px;
+            border-radius: 8px;
+            border: none;
+            background: linear-gradient(135deg, var(--accent-primary), var(--accent-secondary));
+            color: white;
+            font-weight: 600;
+            font-size: 13px;
+            cursor: pointer;
+            transition: all 0.2s;
+            box-shadow: var(--shadow-sm);
+        }
+        
+        .btn-primary:hover {
+            transform: translateY(-1px);
+            box-shadow: var(--glow);
+        }
+        
+        /* Left Sidebar - File Explorer & Tools */
+        .left-sidebar {
+            background: var(--bg-secondary);
+            border-right: 1px solid var(--border-color);
+            display: flex;
+            flex-direction: column;
+            overflow: hidden;
+        }
+        
+        .sidebar-header {
+            padding: 18px 16px;
+            border-bottom: 1px solid var(--border-color);
+            font-size: 13px;
+            font-weight: 700;
+            text-transform: uppercase;
+            letter-spacing: 1.2px;
+            color: var(--text-primary);
+            background: linear-gradient(135deg, var(--bg-secondary) 0%, var(--bg-tertiary) 100%);
+            display: flex;
+            align-items: center;
+            gap: 8px;
+        }
+        
+        .tool-palette {
+            padding: 16px 8px;
+            flex: 1;
+            overflow-y: auto;
+            scrollbar-width: thin;
+            scrollbar-color: var(--border-color) transparent;
+        }
+        
+        .tool-palette::-webkit-scrollbar {
+            width: 6px;
+        }
+        
+        .tool-palette::-webkit-scrollbar-track {
+            background: transparent;
+        }
+        
+        .tool-palette::-webkit-scrollbar-thumb {
+            background: var(--border-color);
+            border-radius: 3px;
+        }
+        
+        .tool-palette::-webkit-scrollbar-thumb:hover {
+            background: var(--text-muted);
+        }
+        
+        .tool-section {
+            margin-bottom: 24px;
+        }
+        
+        .tool-section-title {
+            font-size: 11px;
+            font-weight: 600;
+            text-transform: uppercase;
+            letter-spacing: 0.5px;
+            color: var(--text-muted);
+            margin-bottom: 10px;
+            padding: 0 12px;
+        }
+        
+        .tool-item {
+            padding: 12px 12px;
+            border-radius: 8px;
+            margin: 0 6px 6px 6px;
+            cursor: pointer;
+            transition: all 0.2s ease;
+            display: flex;
+            align-items: center;
+            gap: 12px;
+            font-size: 13px;
+            font-weight: 500;
+            color: var(--text-secondary);
+            border: 1px solid transparent;
+            position: relative;
+        }
+        
+        .tool-item:hover {
+            background: var(--bg-tertiary);
+            color: var(--text-primary);
+            border-color: var(--border-color);
+            transform: translateX(2px);
+            box-shadow: var(--shadow-sm);
+        }
+        
+        .tool-item.active {
+            background: linear-gradient(135deg, rgba(99, 102, 241, 0.15) 0%, rgba(139, 92, 246, 0.1) 100%);
+            color: var(--accent-primary);
+            border-left: 3px solid var(--accent-primary);
+            border-color: rgba(99, 102, 241, 0.3);
+            box-shadow: 0 0 15px rgba(99, 102, 241, 0.2);
+            font-weight: 600;
+        }
+        
+        .tool-icon {
+            width: 24px;
+            height: 24px;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            font-size: 16px;
+            flex-shrink: 0;
+        }
+        
+        .tool-item.active .tool-icon {
+            transform: scale(1.1);
+        }
+        
+        /* Editor Section (Column 2) */
+        .editor-section {
+            background: var(--bg-primary);
+            display: flex;
+            flex-direction: column;
+            overflow: hidden;
+            position: relative;
+        }
+        
+        /* Viewer Section (Column 3) */
+        .viewer-section {
+            background: var(--bg-primary);
+            display: flex;
+            flex-direction: column;
+            overflow: hidden;
+            position: relative;
+        }
+        
+        .editor-tabs {
+            display: flex;
+            align-items: center;
+            gap: 2px;
+            padding: 8px 12px;
+            background: var(--bg-secondary);
+            border-bottom: 1px solid var(--border-color);
+        }
+        
+        .editor-tab {
+            padding: 8px 16px;
+            border-radius: 6px 6px 0 0;
+            font-size: 12px;
+            display: flex;
+            align-items: center;
+            gap: 8px;
+            cursor: pointer;
+            transition: all 0.2s;
+            color: var(--text-secondary);
+            background: transparent;
+        }
+        
+        .editor-tab:hover {
+            background: var(--bg-tertiary);
+            color: var(--text-primary);
+        }
+        
+        .editor-tab.active {
+            background: var(--bg-primary);
+            color: var(--text-primary);
+            border-bottom: 2px solid var(--accent-primary);
+        }
+        
+        .editor-tab-close {
+            width: 16px;
+            height: 16px;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            border-radius: 4px;
+            opacity: 0;
+            transition: opacity 0.2s;
+        }
+        
+        .editor-tab:hover .editor-tab-close {
+            opacity: 1;
+        }
+        
+        .editor-tab-close:hover {
+            background: rgba(255, 255, 255, 0.1);
+        }
+        
+        /* Old split-view styles - no longer needed with 4-column layout */
+        .split-view {
+            display: none;
+        }
+        
+        .resize-handle {
+            display: none; /* Old resize handle between viewer/editor - no longer needed */
+        }
+        
+        /* Editor container - fills the editor section */
+        #editor-container {
+            flex: 1;
+            width: 100%;
+            height: 100%;
+            overflow: hidden;
+        }
+        
+        /* Viewer section styles */
+        .viewer-section {
+            background: #ffffff;
+            position: relative;
+            display: flex;
+            flex-direction: column;
+        }
+        
+        .viewer-toolbar {
+            background: rgba(255, 255, 255, 0.95);
+            backdrop-filter: blur(10px);
+            border-bottom: 1px solid var(--border-color);
+            padding: 8px 12px;
+            display: flex;
+            align-items: center;
+            justify-content: space-between;
+            gap: 12px;
+        }
+        
+        .viewer-controls {
+            display: flex;
+            gap: 6px;
+        }
+        
+        .viewer-btn {
+            padding: 6px 12px;
+            border-radius: 6px;
+            border: 1px solid var(--border-color);
+            background: rgba(26, 26, 36, 0.6);
+            color: var(--text-secondary);
+            font-size: 11px;
+            cursor: pointer;
+            transition: all 0.2s;
+            display: flex;
+            align-items: center;
+            gap: 6px;
+        }
+        
+        .viewer-btn:hover {
+            background: var(--bg-tertiary);
+            border-color: var(--accent-primary);
+            color: var(--accent-primary);
+        }
+        
+        .viewer-btn.active {
+            background: rgba(99, 102, 241, 0.15);
+            border-color: var(--accent-primary);
+            color: var(--accent-primary);
+        }
+        
+        #viewer-frame {
+            flex: 1;
+            border: none;
+            width: 100%;
+            height: 100%;
+        }
+        
+        /* Measurements Overlay */
+        .measurements-overlay {
+            position: absolute;
+            top: 60px;
+            left: 12px;
+            background: rgba(13, 13, 26, 0.95);
+            backdrop-filter: blur(10px);
+            border: 1px solid var(--border-color);
+            border-radius: 12px;
+            padding: 16px;
+            min-width: 200px;
+            box-shadow: var(--shadow-lg);
+        }
+        
+        .measurement-title {
+            font-size: 11px;
+            font-weight: 600;
+            text-transform: uppercase;
+            letter-spacing: 0.5px;
+            color: var(--text-muted);
+            margin-bottom: 12px;
+        }
+        
+        .measurement-item {
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            padding: 8px 0;
+            border-bottom: 1px solid rgba(255, 255, 255, 0.05);
+            font-size: 12px;
+        }
+        
+        .measurement-item:last-child {
+            border-bottom: none;
+        }
+        
+        .measurement-label {
+            color: var(--text-secondary);
+        }
+        
+        .measurement-value {
+            color: var(--accent-primary);
+            font-weight: 600;
+            font-family: 'Courier New', monospace;
+        }
+        
+        /* Right Sidebar - AI Chat */
+        .right-sidebar {
+            background: var(--bg-secondary);
+            border-left: 1px solid var(--border-color);
+            display: flex;
+            flex-direction: column;
+            overflow: hidden;
+        }
+        
+        .chat-header {
+            padding: 16px;
+            border-bottom: 1px solid var(--border-color);
+            display: flex;
+            align-items: center;
+            justify-content: space-between;
+        }
+        
+        .chat-title {
+            font-size: 14px;
+            font-weight: 600;
+            color: var(--text-primary);
+            display: flex;
+            align-items: center;
+            gap: 8px;
+        }
+        
+        .ai-badge {
+            background: linear-gradient(135deg, var(--accent-primary), var(--accent-secondary));
+            padding: 2px 8px;
+            border-radius: 12px;
+            font-size: 10px;
+            font-weight: 700;
+            color: white;
+        }
+        
+        .chat-messages {
+            flex: 1;
+            overflow-y: auto;
+            padding: 16px;
+            display: flex;
+            flex-direction: column;
+            gap: 16px;
+        }
+        
+        .message {
+            display: flex;
+            gap: 12px;
+            animation: fadeIn 0.3s ease;
+        }
+        
+        @keyframes fadeIn {
+            from { opacity: 0; transform: translateY(10px); }
+            to { opacity: 1; transform: translateY(0); }
+        }
+        
+        .message-avatar {
+            width: 32px;
+            height: 32px;
+            border-radius: 8px;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            flex-shrink: 0;
+            font-weight: 600;
+            font-size: 14px;
+        }
+        
+        .message.user .message-avatar {
+            background: linear-gradient(135deg, #10b981, #059669);
+        }
+        
+        .message.ai .message-avatar {
+            background: linear-gradient(135deg, var(--accent-primary), var(--accent-secondary));
+        }
+        
+        .message-content {
+            flex: 1;
+            display: flex;
+            flex-direction: column;
+            gap: 6px;
+        }
+        
+        .message-image {
+            margin-bottom: 8px;
+        }
+        
+        .message-image img {
+            max-width: 200px;
+            max-height: 200px;
+            border-radius: 8px;
+            border: 1px solid var(--border-color);
+            object-fit: contain;
+        }
+        
+        .message-header {
+            display: flex;
+            align-items: center;
+            gap: 8px;
+        }
+        
+        .message-author {
+            font-size: 12px;
+            font-weight: 600;
+            color: var(--text-primary);
+        }
+        
+        .message-time {
+            font-size: 10px;
+            color: var(--text-muted);
+        }
+        
+        .message-text {
+            font-size: 13px;
+            line-height: 1.6;
+            color: var(--text-secondary);
+            background: var(--bg-tertiary);
+            padding: 12px;
+            border-radius: 8px;
+        }
+        
+        .message.ai .message-text {
+            background: rgba(99, 102, 241, 0.08);
+            border-left: 2px solid var(--accent-primary);
+        }
+        
+        /* Verification Results Styling */
+        .verification-result {
+            background: linear-gradient(135deg, rgba(99, 102, 241, 0.1), rgba(139, 92, 246, 0.1));
+            border: 1px solid rgba(99, 102, 241, 0.3);
+            border-radius: 8px;
+            padding: 14px;
+            margin: 8px 0;
+        }
+        
+        .verification-stages {
+            background: rgba(0, 0, 0, 0.2);
+            border-radius: 6px;
+            padding: 10px;
+            margin: 10px 0;
+        }
+        
+        .stage-title {
+            font-weight: 600;
+            color: var(--text-primary);
+            margin-bottom: 8px;
+            font-size: 12px;
+        }
+        
+        .stage-info {
+            padding: 6px 0;
+            font-size: 12px;
+            color: var(--text-secondary);
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+        }
+        
+        .step-name {
+            color: var(--text-secondary);
+        }
+        
+        .step-progress {
+            color: var(--accent-primary);
+            font-weight: 600;
+            font-family: 'Courier New', monospace;
+        }
+        
+        /* Assumptions Display */
+        .assumptions {
+            background: rgba(255, 193, 7, 0.1);
+            border-left: 2px solid rgba(255, 193, 7, 0.5);
+            padding: 10px;
+            border-radius: 4px;
+            margin-top: 10px;
+        }
+        
+        .assumptions-title {
+            font-weight: 600;
+            color: #ffc107;
+            margin-bottom: 6px;
+            font-size: 12px;
+        }
+        
+        .assumption-item {
+            font-size: 11px;
+            color: var(--text-secondary);
+            padding: 2px 0;
+            line-height: 1.4;
+        }
+        
+        /* Progress Bar */
+        #progress-bar-container {
+            margin-top: 12px;
+            width: 100%;
+            display: flex;
+            align-items: center;
+            gap: 10px;
+        }
+        
+        #progress-bar {
+            flex: 1;
+            height: 4px;
+            background: rgba(99, 102, 241, 0.3);
+            border-radius: 2px;
+            position: relative;
+            overflow: hidden;
+        }
+        
+        #progress-bar::after {
+            content: '';
+            position: absolute;
+            left: 0;
+            top: 0;
+            height: 100%;
+            width: var(--progress-width, 0%);
+            background: linear-gradient(90deg, var(--accent-primary), var(--accent-secondary));
+            transition: width 0.5s ease;
+        }
+        
+        #progress-percent {
+            font-family: 'Courier New', monospace;
+            font-size: 11px;
+            color: var(--accent-primary);
+            font-weight: 600;
+            min-width: 35px;
+        }
+        
+        .quick-actions {
+            display: flex;
+            flex-wrap: wrap;
+            gap: 6px;
+            margin-top: 8px;
+        }
+        
+        .quick-action {
+            padding: 6px 12px;
+            border-radius: 6px;
+            border: 1px solid var(--border-color);
+            background: var(--bg-secondary);
+            font-size: 11px;
+            cursor: pointer;
+            transition: all 0.2s;
+            color: var(--text-secondary);
+        }
+        
+        .quick-action:hover {
+            background: var(--bg-tertiary);
+            border-color: var(--accent-primary);
+            color: var(--accent-primary);
+        }
+        
+        .chat-input-area {
+            padding: 16px;
+            border-top: 1px solid var(--border-color);
+            background: var(--bg-tertiary);
+            display: flex;
+            flex-direction: column;
+            gap: 12px;
+        }
+        
+        .chat-mode-toggle {
+            display: flex;
+            gap: 6px;
+            padding: 4px;
+            background: var(--bg-secondary);
+            border-radius: 8px;
+            border: 1px solid var(--border-color);
+        }
+        
+        .mode-btn {
+            flex: 1;
+            padding: 8px 16px;
+            border-radius: 6px;
+            border: none;
+            background: transparent;
+            color: var(--text-secondary);
+            font-size: 12px;
+            font-weight: 500;
+            cursor: pointer;
+            transition: all 0.2s;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            gap: 6px;
+            position: relative;
+        }
+        
+        .mode-btn:hover {
+            color: var(--text-primary);
+            background: rgba(99, 102, 241, 0.1);
+        }
+        
+        .mode-btn.active {
+            background: linear-gradient(135deg, var(--accent-primary), var(--accent-secondary));
+            color: white;
+            box-shadow: var(--glow);
+        }
+        
+        .chat-input-wrapper {
+            position: relative;
+            display: flex;
+            flex-direction: column;
+            gap: 8px;
+        }
+        
+        .input-controls {
+            display: flex;
+            gap: 8px;
+            align-items: flex-end;
+        }
+        
+        /* Image Preview Styles */
+        .image-preview-container {
+            padding: 8px;
+            background: var(--bg-tertiary);
+            border-radius: 8px;
+            border: 1px solid var(--border-color);
+        }
+        
+        .image-preview-wrapper {
+            position: relative;
+            display: inline-block;
+            max-width: 200px;
+        }
+        
+        .image-preview-wrapper img {
+            width: 100%;
+            height: auto;
+            max-height: 150px;
+            object-fit: contain;
+            border-radius: 6px;
+            border: 1px solid var(--border-color);
+        }
+        
+        .remove-image-btn {
+            position: absolute;
+            top: -8px;
+            right: -8px;
+            width: 24px;
+            height: 24px;
+            border-radius: 50%;
+            background: var(--accent-error);
+            border: 2px solid var(--bg-secondary);
+            color: white;
+            cursor: pointer;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            transition: all 0.2s;
+        }
+        
+        .remove-image-btn:hover {
+            transform: scale(1.1);
+            box-shadow: 0 0 15px rgba(239, 68, 68, 0.5);
+        }
+        
+        .action-btn {
+            width: 40px;
+            height: 40px;
+            border-radius: 8px;
+            border: none;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            cursor: pointer;
+            transition: all 0.2s;
+            box-shadow: var(--shadow-sm);
+            position: relative;
+            flex-shrink: 0;
+        }
+        
+        .attach-btn {
+            background: var(--bg-secondary);
+            color: var(--text-secondary);
+            border: 1px solid var(--border-color);
+        }
+        
+        .attach-btn:hover {
+            background: var(--bg-tertiary);
+            color: var(--accent-primary);
+            border-color: var(--accent-primary);
+        }
+        
+        .attach-btn.has-image {
+            background: linear-gradient(135deg, rgba(99, 102, 241, 0.2), rgba(139, 92, 246, 0.2));
+            color: var(--accent-primary);
+            border-color: var(--accent-primary);
+        }
+        
+        .stop-btn {
+            background: linear-gradient(135deg, var(--accent-error), #dc2626);
+            color: white;
+        }
+        
+        .stop-btn:hover {
+            transform: scale(1.05);
+            box-shadow: 0 0 20px rgba(239, 68, 68, 0.4);
+        }
+        
+        #chat-input {
+            flex: 1;
+            background: var(--bg-secondary);
+            border: 1px solid var(--border-color);
+            border-radius: 8px;
+            padding: 12px 16px;
+            color: var(--text-primary);
+            font-size: 13px;
+            font-family: inherit;
+            resize: none;
+            max-height: 120px;
+            transition: all 0.2s;
+        }
+        
+        #chat-input:focus {
+            outline: none;
+            border-color: var(--accent-primary);
+            box-shadow: var(--glow);
+        }
+        
+        .send-btn, .generate-btn {
+            background: linear-gradient(135deg, var(--accent-primary), var(--accent-secondary));
+            color: white;
+        }
+        
+        .send-btn:hover, .generate-btn:hover {
+            transform: scale(1.05);
+            box-shadow: var(--glow);
+        }
+        
+        .action-btn:disabled {
+            opacity: 0.5;
+            cursor: not-allowed;
+            transform: none;
+        }
+        
+        /* Tooltip */
+        .tooltip {
+            position: absolute;
+            bottom: calc(100% + 8px);
+            left: 50%;
+            transform: translateX(-50%);
+            background: rgba(13, 13, 26, 0.95);
+            backdrop-filter: blur(10px);
+            border: 1px solid var(--border-color);
+            border-radius: 8px;
+            padding: 8px 12px;
+            font-size: 11px;
+            white-space: nowrap;
+            pointer-events: none;
+            opacity: 0;
+            transition: opacity 0.2s, transform 0.2s;
+            z-index: 1000;
+            box-shadow: var(--shadow-lg);
+        }
+        
+        .tooltip::after {
+            content: '';
+            position: absolute;
+            top: 100%;
+            left: 50%;
+            transform: translateX(-50%);
+            border: 6px solid transparent;
+            border-top-color: rgba(13, 13, 26, 0.95);
+        }
+        
+        .action-btn:hover .tooltip,
+        .mode-btn:hover .tooltip {
+            opacity: 1;
+            transform: translateX(-50%) translateY(-4px);
+        }
+        
+        .hidden {
+            display: none;
+        }
+        
+        /* History Panel */
+        .history-panel {
+            padding: 12px;
+            max-height: 200px;
+            overflow-y: auto;
+            border-top: 1px solid var(--border-color);
+        }
+        
+        .history-item {
+            padding: 10px;
+            border-radius: 6px;
+            margin-bottom: 6px;
+            font-size: 12px;
+            cursor: pointer;
+            transition: all 0.2s;
+            color: var(--text-secondary);
+            display: flex;
+            align-items: center;
+            gap: 8px;
+        }
+        
+        .history-item:hover {
+            background: var(--bg-tertiary);
+            color: var(--text-primary);
+        }
+        
+        /* Status Bar */
+        .status-bar {
+            grid-column: 1 / -1;
+            background: var(--bg-secondary);
+            border-top: 1px solid var(--border-color);
+            display: flex;
+            align-items: center;
+            justify-content: space-between;
+            padding: 0 16px;
+            font-size: 11px;
+            color: var(--text-muted);
+        }
+        
+        .status-left, .status-right {
+            display: flex;
+            gap: 16px;
+            align-items: center;
+        }
+        
+        .status-item {
+            display: flex;
+            align-items: center;
+            gap: 6px;
+        }
+        
+        .status-indicator {
+            width: 6px;
+            height: 6px;
+            border-radius: 50%;
+            animation: pulse 2s ease-in-out infinite;
+        }
+        
+        .status-indicator.success {
+            background: var(--accent-success);
+        }
+        
+        .status-indicator.warning {
+            background: var(--accent-warning);
+        }
+        
+        .status-indicator.error {
+            background: var(--accent-error);
+        }
+        
+        @keyframes pulse {
+            0%, 100% { opacity: 1; }
+            50% { opacity: 0.5; }
+        }
+        
+        /* Loading States */
+        .loading {
+            display: flex;
+            align-items: center;
+            gap: 8px;
+            padding: 12px;
+            background: rgba(99, 102, 241, 0.1);
+            border-radius: 8px;
+        }
+        
+        .loading-spinner {
+            width: 16px;
+            height: 16px;
+            border: 2px solid var(--border-color);
+            border-top-color: var(--accent-primary);
+            border-radius: 50%;
+            animation: spin 0.8s linear infinite;
+        }
+        
+        @keyframes spin {
+            to { transform: rotate(360deg); }
+        }
+        
+        /* Scrollbar Styling */
+        ::-webkit-scrollbar {
+            width: 8px;
+            height: 8px;
+        }
+        
+        ::-webkit-scrollbar-track {
+            background: var(--bg-secondary);
+        }
+        
+        ::-webkit-scrollbar-thumb {
+            background: var(--bg-tertiary);
+            border-radius: 4px;
+        }
+        
+        ::-webkit-scrollbar-thumb:hover {
+            background: var(--border-color);
+        }
+        
+        /* Tooltips */
+        [data-tooltip] {
+            position: relative;
+        }
+        
+        [data-tooltip]:hover::after {
+            content: attr(data-tooltip);
+            position: absolute;
+            bottom: 100%;
+            left: 50%;
+            transform: translateX(-50%);
+            padding: 6px 12px;
+            background: var(--bg-tertiary);
+            border: 1px solid var(--border-color);
+            border-radius: 6px;
+            font-size: 11px;
+            white-space: nowrap;
+            pointer-events: none;
+            margin-bottom: 6px;
+            box-shadow: var(--shadow-md);
+            z-index: 1000;
+        }
+        
+        /* Code highlighting in chat */
+        code {
+            background: var(--bg-primary);
+            padding: 2px 6px;
+            border-radius: 4px;
+            font-family: 'Courier New', monospace;
+            font-size: 12px;
+            color: var(--accent-primary);
+        }
+        
+        pre {
+            background: var(--bg-primary);
+            padding: 12px;
+            border-radius: 8px;
+            overflow-x: auto;
+            margin: 8px 0;
+            border-left: 2px solid var(--accent-primary);
+        }
+        
+        pre code {
+            background: none;
+            padding: 0;
+        }
+    </style>
+</head>
+<body>
+    <div class="app-container">
+        <!-- Resizer Handles -->
+        <div class="resizer resizer-left" id="resizer-left"></div>
+        <div class="resizer resizer-editor" id="resizer-editor"></div>
+        <div class="resizer resizer-right" id="resizer-right"></div>
+        <div class="resizer resizer-horizontal" id="resizer-horizontal"></div>
+        
+        <!-- Header -->
+        <header class="header">
+            <div class="header-left">
+                <div class="logo">
+                    <div class="logo-icon">F</div>
+                    <span>FLUDO STUDIO</span>
+                </div>
+                <nav class="nav-tabs">
+                    <div class="nav-tab active">Design</div>
+                </nav>
+            </div>
+            <div class="header-actions">
+                <input type="file" id="file-import-input" accept=".py,.txt" style="display: none;">
+                <input type="file" id="model-import-input" accept=".obj,.stl" style="display: none;">
+                <button class="theme-toggle" id="theme-toggle" title="Toggle dark mode">
+                    <svg class="sun-icon" width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                        <circle cx="12" cy="12" r="5"/>
+                        <line x1="12" y1="1" x2="12" y2="3"/>
+                        <line x1="12" y1="21" x2="12" y2="23"/>
+                        <line x1="4.22" y1="4.22" x2="5.64" y2="5.64"/>
+                        <line x1="18.36" y1="18.36" x2="19.78" y2="19.78"/>
+                        <line x1="1" y1="12" x2="3" y2="12"/>
+                        <line x1="21" y1="12" x2="23" y2="12"/>
+                        <line x1="4.22" y1="19.78" x2="5.64" y2="18.36"/>
+                        <line x1="18.36" y1="5.64" x2="19.78" y2="4.22"/>
+                    </svg>
+                    <svg class="moon-icon" width="18" height="18" viewBox="0 0 24 24" fill="currentColor" style="display: none;">
+                        <path d="M21 12.79A9 9 0 1 1 11.21 3 7 7 0 0 0 21 12.79z"/>
+                    </svg>
+                </button>
+                <button class="btn-primary" id="execute-btn">
+                    <svg width="14" height="14" viewBox="0 0 24 24" fill="currentColor" style="margin-right: 4px;">
+                        <path d="M8 5v14l11-7z"/>
+                    </svg>
+                    Execute
+                </button>
+            </div>
+        </header>
+        
+        <!-- Left Sidebar -->
+        <aside class="left-sidebar">
+            <div class="sidebar-header">Tool Library</div>
+            <div class="tool-palette">
+                <div class="tool-section">
+                    <div class="tool-section-title">Basic Shapes</div>
+                    <div class="tool-item active">
+                        <div class="tool-icon">◻</div>
+                        <span>Box</span>
+                    </div>
+                    <div class="tool-item">
+                        <div class="tool-icon">◯</div>
+                        <span>Cylinder</span>
+                    </div>
+                    <div class="tool-item">
+                        <div class="tool-icon">◬</div>
+                        <span>Sphere</span>
+                    </div>
+                    <div class="tool-item">
+                        <div class="tool-icon">△</div>
+                        <span>Cone</span>
+                    </div>
+                </div>
+                
+                <div class="tool-section">
+                    <div class="tool-section-title">Operations</div>
+                    <div class="tool-item">
+                        <div class="tool-icon">⊕</div>
+                        <span>Union</span>
+                    </div>
+                    <div class="tool-item">
+                        <div class="tool-icon">⊖</div>
+                        <span>Subtract</span>
+                    </div>
+                    <div class="tool-item">
+                        <div class="tool-icon">⊗</div>
+                        <span>Intersect</span>
+                    </div>
+                    <div class="tool-item">
+                        <div class="tool-icon">⟲</div>
+                        <span>Revolve</span>
+                    </div>
+                </div>
+                
+                <div class="tool-section">
+                    <div class="tool-section-title">Modify</div>
+                    <div class="tool-item">
+                        <div class="tool-icon">◐</div>
+                        <span>Fillet</span>
+                    </div>
+                    <div class="tool-item">
+                        <div class="tool-icon">◑</div>
+                        <span>Chamfer</span>
+                    </div>
+                    <div class="tool-item">
+                        <div class="tool-icon">⊡</div>
+                        <span>Array</span>
+                    </div>
+                    <div class="tool-item">
+                        <div class="tool-icon">⊙</div>
+                        <span>Mirror</span>
+                    </div>
+                </div>
+                
+                <div class="tool-section">
+                    <div class="tool-section-title">Import</div>
+                    <div class="tool-item" id="import-model">
+                        <div class="tool-icon">📥</div>
+                        <span>Import 3D Model</span>
+                    </div>
+                </div>
+                
+                <div class="tool-section">
+                    <div class="tool-section-title">Export</div>
+                    <div class="tool-item" id="export-stl">
+                        <div class="tool-icon">S</div>
+                        <span>Export STL</span>
+                    </div>
+                    <div class="tool-item" id="export-step">
+                        <div class="tool-icon">T</div>
+                        <span>Export STEP</span>
+                    </div>
+                    <div class="tool-item" id="export-obj">
+                        <div class="tool-icon">O</div>
+                        <span>Export OBJ</span>
+                    </div>
+                </div>
+            </div>
+        </aside>
+        
+        <!-- Code Editor Section (Column 2) -->
+        <section class="editor-section">
+            <div class="editor-tabs">
+                <div class="editor-tab active">
+                    <span>PY</span>
+                    <span>main.py</span>
+                    <div class="editor-tab-close">×</div>
+                </div>
+            </div>
+            <div id="editor-container"></div>
+        </section>
+        
+        <!-- 3D Viewer Section (Column 3) -->
+        <main class="viewer-section">
+            <div class="viewer-toolbar">
+                <div class="viewer-controls">
+                    <button class="viewer-btn" id="fit-view-btn" data-tooltip="Fit View">
+                        <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                            <rect x="3" y="3" width="18" height="18" rx="2"/>
+                            <path d="M9 9h6v6H9z"/>
+                        </svg>
+                    </button>
+                    <button class="viewer-btn" id="wireframe-btn" data-tooltip="Wireframe">
+                        <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                            <path d="M21 16V8a2 2 0 0 0-1-1.73l-7-4a2 2 0 0 0-2 0l-7 4A2 2 0 0 0 3 8v8a2 2 0 0 0 1 1.73l7 4a2 2 0 0 0 2 0l7-4A2 2 0 0 0 21 16z"/>
+                        </svg>
+                    </button>
+                    <button class="viewer-btn active" id="studio-mode-btn" data-tooltip="Studio Mode">
+                        <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                            <circle cx="12" cy="12" r="3"/>
+                            <path d="M12 1v6m0 6v6M1 12h6m6 0h6"/>
+                        </svg>
+                    </button>
+                    <button class="viewer-btn active" id="grid-btn" data-tooltip="Grid">
+                        <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                            <rect x="3" y="3" width="7" height="7"/><rect x="14" y="3" width="7" height="7"/>
+                            <rect x="14" y="14" width="7" height="7"/><rect x="3" y="14" width="7" height="7"/>
+                        </svg>
+                    </button>
+                    <button class="viewer-btn" id="measurements-btn" data-tooltip="Measurements">
+                        <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                            <path d="M3 9l9-7 9 7v11a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2z"/>
+                            <polyline points="9 22 9 12 15 12 15 22"/>
+                        </svg>
+                    </button>
+                    <button class="viewer-btn" id="undo-btn" data-tooltip="Undo viewer changes (move/rotate/scale/delete)">
+                        <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                            <path d="M3 7v6h6"/>
+                            <path d="M21 17a9 9 0 00-9-9 9 9 0 00-6 2.3L3 13"/>
+                        </svg>
+                    </button>
+                </div>
+                <div class="status-item">
+                    <div class="status-indicator success"></div>
+                    <span>Ready</span>
+                </div>
+            </div>
+            
+            <iframe id="viewer-frame" src="/viewer.html"></iframe>
+            
+            <!-- Measurements Overlay -->
+            <div class="measurements-overlay" id="measurements" style="display: none;">
+                <div class="measurement-title">Measurements</div>
+                <div class="measurement-item">
+                    <span class="measurement-label">Width</span>
+                    <span class="measurement-value" id="measure-width">--</span>
+                </div>
+                <div class="measurement-item">
+                    <span class="measurement-label">Height</span>
+                    <span class="measurement-value" id="measure-height">--</span>
+                </div>
+                <div class="measurement-item">
+                    <span class="measurement-label">Depth</span>
+                    <span class="measurement-value" id="measure-depth">--</span>
+                </div>
+                <div class="measurement-item">
+                    <span class="measurement-label">Volume</span>
+                    <span class="measurement-value" id="measure-volume">--</span>
+                </div>
+                <div class="measurement-item">
+                    <span class="measurement-label">Surface</span>
+                    <span class="measurement-value" id="measure-surface">--</span>
+                </div>
+            </div>
+        </main>
+        
+        <!-- Right Sidebar - AI Chat -->
+        <aside class="right-sidebar">
+            <div class="chat-header">
+                <div class="chat-title">
+                    <span style="display: inline-flex; align-items: center; justify-content: center; width: 24px; height: 24px; border-radius: 50%; background: linear-gradient(135deg, #667eea 0%, #764ba2 100%); color: white; font-weight: bold; font-size: 12px; margin-right: 8px;">AI</span>
+                    LUDO
+                    <span class="ai-badge">PRO</span>
+                </div>
+                <button class="icon-btn" id="clear-history-btn" data-tooltip="Clear History">
+                    <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                        <polyline points="3 6 5 6 21 6"/><path d="M19 6v14a2 2 0 0 1-2 2H7a2 2 0 0 1-2-2V6m3 0V4a2 2 0 0 1 2-2h4a2 2 0 0 1 2 2v2"/>
+                    </svg>
+                </button>
+            </div>
+            
+            <div class="chat-messages" id="chat-messages">
+                <div class="message ai">
+                    <div class="message-avatar" style="background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);">AI</div>
+                    <div class="message-content">
+                        <div class="message-header">
+                            <span class="message-author">LUDO</span>
+                            <span class="message-time">now</span>
+                        </div>
+                        <div class="message-text">
+                            Hello! I'm LUDO, your AI-powered CAD assistant. I can help you:
+                            <br><br>
+                            - Generate 3D models from descriptions<br>
+                            - Modify existing designs<br>
+                            - Explain CadQuery concepts<br>
+                            - Optimize your code<br>
+                            <br>
+                            What would you like to create today?
+                        </div>
+                        <div class="quick-actions">
+                            <button class="quick-action">Create a gear</button>
+                            <button class="quick-action">Make a bracket</button>
+                            <button class="quick-action">Design a box</button>
+                        </div>
+                    </div>
+                </div>
+            </div>
+            
+            <div class="chat-input-area">
+                <!-- Mode Toggle -->
+                <div class="chat-mode-toggle">
+                    <button class="mode-btn" id="chat-mode-btn" data-mode="chat">
+                        <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                            <path d="M21 15a2 2 0 0 1-2 2H7l-4 4V5a2 2 0 0 1 2-2h14a2 2 0 0 1 2 2z"/>
+                        </svg>
+                        <span>Chat</span>
+                        <div class="tooltip">Have a conversation with AI</div>
+                    </button>
+                    <button class="mode-btn active" id="generate-mode-btn" data-mode="generate">
+                        <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                            <path d="M12 2v20M2 12h20"/>
+                        </svg>
+                        <span>Generate</span>
+                        <div class="tooltip">Generate CAD code directly</div>
+                    </button>
+                </div>
+                
+                <!-- Input Area -->
+                <div class="chat-input-wrapper">
+                    <!-- Image Preview Container -->
+                    <div class="image-preview-container" id="image-preview-container" style="display: none;">
+                        <div class="image-preview-wrapper">
+                            <img id="image-preview" src="" alt="Uploaded image">
+                            <button class="remove-image-btn" id="remove-image-btn" title="Remove image">
+                                <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                                    <line x1="18" y1="6" x2="6" y2="18"></line>
+                                    <line x1="6" y1="6" x2="18" y2="18"></line>
+                                </svg>
+                            </button>
+                        </div>
+                    </div>
+                    
+                    <div class="input-controls">
+                        <!-- Image Upload Button -->
+                        <input type="file" id="image-input" accept="image/*" style="display: none;">
+                        <button class="action-btn attach-btn" id="attach-image-btn" title="Upload image reference">
+                            <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                                <rect x="3" y="3" width="18" height="18" rx="2" ry="2"></rect>
+                                <circle cx="8.5" cy="8.5" r="1.5"></circle>
+                                <polyline points="21 15 16 10 5 21"></polyline>
+                            </svg>
+                        </button>
+                        
+                        <textarea id="chat-input" placeholder="Describe what you want to create (optionally attach an image for reference)..." rows="1"></textarea>
+                        
+                        <!-- Stop Button (hidden by default) -->
+                        <button class="action-btn stop-btn hidden" id="stop-btn">
+                            <svg width="18" height="18" viewBox="0 0 24 24" fill="currentColor">
+                                <rect x="6" y="6" width="12" height="12" rx="2"/>
+                            </svg>
+                            <div class="tooltip">Stop generation</div>
+                        </button>
+                        
+                        <!-- Send/Generate Button -->
+                        <button class="action-btn send-btn" id="send-btn">
+                            <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                                <line x1="22" y1="2" x2="11" y2="13"/><polygon points="22 2 15 22 11 13 2 9 22 2"/>
+                            </svg>
+                            <div class="tooltip">Generate code (Ctrl+Enter)</div>
+                        </button>
+                    </div>
+                </div>
+            </div>
+        </aside>
+        
+    </div>
+    
+    <!-- Monaco Editor -->
+    <script src="https://cdn.jsdelivr.net/npm/monaco-editor@0.45.0/min/vs/loader.js"></script>
+    <script>
+        // Debug: Listen for messages from viewer iframe
+        window.addEventListener('message', (evt) => {
+            if (evt.data && evt.data.type === 'viewer_debug') {
+                console.log('[PARENT RECEIVED FROM VIEWER]:', evt.data.message);
+            }
+            if (evt.data && evt.data.type === 'viewer_ready') {
+                console.log('[PARENT] ✅ VIEWER IS READY!', new Date(evt.data.timestamp));
+            }
+        });
+        
+        // Theme management
+        const themeToggle = document.getElementById('theme-toggle');
+        const body = document.body;
+        
+        // Load saved theme or default to light mode
+        const savedTheme = localStorage.getItem('theme') || 'light';
+        if (savedTheme === 'dark') {
+            body.classList.add('dark-mode');
+        }
+        
+        // Theme toggle handler
+        themeToggle.addEventListener('click', () => {
+            body.classList.toggle('dark-mode');
+            const isDark = body.classList.contains('dark-mode');
+            localStorage.setItem('theme', isDark ? 'dark' : 'light');
+            
+            // Update Monaco editor theme if it exists
+            if (editor) {
+                monaco.editor.setTheme(isDark ? 'cadStudioDark' : 'cadStudioLight');
+            }
+        });
+
+        let editor;
+        let currentModel = null;
+        
+        // Initialize Monaco Editor
+        require.config({ paths: { vs: 'https://cdn.jsdelivr.net/npm/monaco-editor@0.45.0/min/vs' }});
+        
+        require(['vs/editor/editor.main'], function() {
+            // Light theme
+            monaco.editor.defineTheme('cadStudioLight', {
+                base: 'vs',
+                inherit: true,
+                rules: [
+                    { token: 'comment', foreground: '6b7280', fontStyle: 'italic' },
+                    { token: 'keyword', foreground: '8b5cf6' },
+                    { token: 'string', foreground: '10b981' },
+                    { token: 'number', foreground: 'f59e0b' },
+                    { token: 'function', foreground: '6366f1' },
+                ],
+                colors: {
+                    'editor.background': '#ffffff',
+                    'editor.foreground': '#1f2937',
+                    'editor.lineHighlightBackground': '#f3f4f6',
+                    'editorLineNumber.foreground': '#9ca3af',
+                    'editorLineNumber.activeForeground': '#6366f1',
+                    'editor.selectionBackground': '#6366f133',
+                    'editor.inactiveSelectionBackground': '#6366f11a',
+                    'editorCursor.foreground': '#6366f1',
+                }
+            });
+
+            // Dark theme
+            monaco.editor.defineTheme('cadStudioDark', {
+                base: 'vs-dark',
+                inherit: true,
+                rules: [
+                    { token: 'comment', foreground: '6b7280', fontStyle: 'italic' },
+                    { token: 'keyword', foreground: '8b5cf6' },
+                    { token: 'string', foreground: '10b981' },
+                    { token: 'number', foreground: 'f59e0b' },
+                    { token: 'function', foreground: '6366f1' },
+                ],
+                colors: {
+                    'editor.background': '#0a0a0f',
+                    'editor.foreground': '#e5e7eb',
+                    'editor.lineHighlightBackground': '#13131a',
+                    'editorLineNumber.foreground': '#6b7280',
+                    'editorLineNumber.activeForeground': '#8b5cf6',
+                    'editor.selectionBackground': '#8b5cf633',
+                    'editor.inactiveSelectionBackground': '#8b5cf61a',
+                    'editorCursor.foreground': '#8b5cf6',
+                    'editor.findMatchBackground': '#f59e0b33',
+                    'editor.findMatchHighlightBackground': '#f59e0b1a',
+                }
+            });
+            
+            editor = monaco.editor.create(document.getElementById('editor-container'), {
+                value: `import cadquery as cq
+
+# Create a simple box with rounded edges
+result = (cq.Workplane("XY")
+    .box(50, 40, 30)
+    .edges("|Z")
+    .fillet(2)
+)`,
+                language: 'python',
+                theme: body.classList.contains('dark-mode') ? 'cadStudioDark' : 'cadStudioLight',
+                fontSize: 13,
+                fontFamily: "'Cascadia Code', 'Fira Code', 'Consolas', monospace",
+                fontLigatures: true,
+                minimap: { enabled: true },
+                lineNumbers: 'on',
+                renderWhitespace: 'selection',
+                scrollBeyondLastLine: false,
+                automaticLayout: false, // Changed to false - we'll handle it manually for smoother resizing
+                padding: { top: 16, bottom: 16 },
+                rulers: [80, 120], // Vertical ruler lines at columns 80 and 120
+                guides: {
+                    indentation: true, // Show indentation guides
+                    bracketPairs: true, // Highlight bracket pair guides
+                    bracketPairsHorizontal: true,
+                    highlightActiveIndentation: true
+                },
+                suggest: {
+                    snippetsPreventQuickSuggestions: false
+                }
+            });
+            
+            // Make editor globally accessible
+            window.editor = editor;
+            
+            // Add ResizeObserver for smooth automatic resizing
+            const editorContainer = document.getElementById('editor-container');
+            let resizeObserverTimeout = null;
+            const resizeObserver = new ResizeObserver(() => {
+                if (resizeObserverTimeout) clearTimeout(resizeObserverTimeout);
+                resizeObserverTimeout = setTimeout(() => {
+                    if (window.editor) {
+                        window.editor.layout();
+                    }
+                }, 10);
+            });
+            resizeObserver.observe(editorContainer);
+            
+            // Update cursor position
+            editor.onDidChangeCursorPosition((e) => {
+                document.getElementById('cursor-pos').textContent = 
+                    `Ln ${e.position.lineNumber}, Col ${e.position.column}`;
+            });
+        });
+        
+        // ============ OLD RESIZABLE SPLIT VIEW - DISABLED (now using 4-column grid) ============
+        // (function initResizer() {
+        //     ... old code disabled ...
+        // })();
+        
+        // Execute Code
+        document.getElementById('execute-btn').addEventListener('click', async () => {
+            // Ensure editor is initialized
+            if (!window.editor) {
+                console.error('Editor not initialized!');
+                addChatMessage('ai', 'Editor is not ready yet. Please wait a moment and try again.');
+                return;
+            }
+            
+            const code = window.editor.getValue();
+            if (!code || !code.trim()) {
+                addChatMessage('ai', 'Please write some CadQuery code first!');
+                return;
+            }
+            
+            showStatus('Executing...', 'warning');
+            console.log('Executing code:', code);
+            
+            try {
+                const response = await fetch('/api/cad/execute', {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify({ script: code })
+                });
+                
+                console.log('Response status:', response.status);
+                const data = await response.json();
+                console.log('Response data:', data);
+                console.log('data.url:', data.url);
+                console.log('data.multi_object:', data.multi_object);
+                console.log('data.error:', data.error);
+                
+                if (data.error) {
+                    showStatus('Execution failed', 'error');
+                    addChatMessage('ai', `Error: ${data.error}`);
+                    if (data.traceback) {
+                        console.error('Traceback:', data.traceback);
+                    }
+                } else if (data.multi_object && data.objects) {
+                    // Multiple objects detected!
+                    showStatus(`${data.num_objects} objects loaded`, 'success');
+                    addChatMessage('ai', `Found ${data.num_objects} separate objects: ${data.objects.map(o => o.name).join(', ')}`);
+                    
+                    console.log('Loading multiple STLs:', data.objects);
+                    
+                    // Load all objects in viewer
+                    const viewerFrame = document.getElementById('viewer-frame');
+                    if (!viewerFrame) {
+                        console.error('Viewer frame element not found!');
+                        addChatMessage('ai', 'Error: 3D viewer is not ready. Please refresh the page.');
+                        return;
+                    }
+                    
+                    const sendToViewer = () => {
+                        const viewer = viewerFrame.contentWindow;
+                        if (viewer) {
+                            console.log('Sending loadMultipleSTL message to viewer');
+                            viewer.postMessage({ 
+                                action: 'loadMultipleSTL', 
+                                objects: data.objects  // Array of {url, name, index}
+                            }, '*');
+                            
+                            // Keep grid visible
+                            setTimeout(() => {
+                                viewer.postMessage({ 
+                                    action: 'setOptions', 
+                                    options: { 
+                                        grid: window.__gridEnabled !== false,
+                                        axes: false,
+                                        preset: window.__wireframeEnabled ? 'wireframe' : (window.__studioMode ? 'luminous' : 'studio')
+                                    } 
+                                }, '*');
+                            }, 500);
+                        }
+                    };
+                    
+                    if (viewerFrame.contentDocument && viewerFrame.contentDocument.readyState === 'complete') {
+                        sendToViewer();
+                    } else {
+                        viewerFrame.addEventListener('load', sendToViewer);
+                    }
+                    
+                } else if (data.url) {
+                    // Single object (original behavior)
+                    showStatus('Model loaded', 'success');
+                    addChatMessage('ai', 'Model generated successfully!');
+                    
+                    console.log('Loading STL from:', data.url);
+                    
+                    // Load in viewer - wait for iframe to be ready
+                    const viewerFrame = document.getElementById('viewer-frame');
+                    if (!viewerFrame) {
+                        console.error('Viewer frame element not found!');
+                        addChatMessage('ai', 'Error: 3D viewer is not ready. Please refresh the page.');
+                        return;
+                    }
+                    
+                    // Ensure iframe is loaded
+                    const sendToViewer = () => {
+                        const viewer = viewerFrame.contentWindow;
+                        console.log('[PARENT] Attempting to send loadSTL message');
+                        console.log('[PARENT] viewer:', viewer);
+                        console.log('[PARENT] data.url:', data.url);
+                        if (viewer) {
+                            console.log('[PARENT] Sending loadSTL message to viewer with URL:', data.url);
+                            viewer.postMessage({ 
+                                action: 'loadSTL', 
+                                url: data.url 
+                            }, '*');
+                            
+                            // Keep grid and current preset visible after model loads
+                            setTimeout(() => {
+                                viewer.postMessage({ 
+                                    action: 'setOptions', 
+                                    options: { 
+                                        grid: window.__gridEnabled !== false,
+                                        axes: false,
+                                        preset: window.__wireframeEnabled ? 'wireframe' : (window.__studioMode ? 'luminous' : 'studio')
+                                    } 
+                                }, '*');
+                            }, 500);
+                        } else {
+                            console.error('Viewer contentWindow not accessible!');
+                            addChatMessage('ai', 'Error: Cannot communicate with 3D viewer. Please refresh the page.');
+                        }
+                    };
+                    
+                    // If iframe not loaded yet, wait for it
+                    if (viewerFrame.contentWindow && viewerFrame.contentWindow.document.readyState === 'complete') {
+                        sendToViewer();
+                    } else {
+                        viewerFrame.onload = sendToViewer;
+                        // Fallback timeout
+                        setTimeout(sendToViewer, 1000);
+                    }
+                    
+                    // Update measurements but keep hidden unless user clicks button
+                    updateMeasurements();
+                }
+            } catch (error) {
+                showStatus('Connection error', 'error');
+                addChatMessage('ai', `Error: ${error.message}`);
+            }
+        });
+        
+        // AI Chat
+        const chatInput = document.getElementById('chat-input');
+        const sendBtn = document.getElementById('send-btn');
+        const stopBtn = document.getElementById('stop-btn');
+        const chatMessages = document.getElementById('chat-messages');
+        const chatModeBtn = document.getElementById('chat-mode-btn');
+        const generateModeBtn = document.getElementById('generate-mode-btn');
+        
+        // Image upload elements
+        const attachImageBtn = document.getElementById('attach-image-btn');
+        const imageInput = document.getElementById('image-input');
+        const imagePreviewContainer = document.getElementById('image-preview-container');
+        const imagePreview = document.getElementById('image-preview');
+        const removeImageBtn = document.getElementById('remove-image-btn');
+        
+        let uploadedImageData = null; // Store base64 image data
+        
+        // Image upload handlers
+        attachImageBtn.addEventListener('click', () => {
+            imageInput.click();
+        });
+        
+        imageInput.addEventListener('change', (e) => {
+            const file = e.target.files[0];
+            if (file && file.type.startsWith('image/')) {
+                const reader = new FileReader();
+                reader.onload = (event) => {
+                    uploadedImageData = event.target.result;
+                    imagePreview.src = uploadedImageData;
+                    imagePreviewContainer.style.display = 'block';
+                    attachImageBtn.classList.add('has-image');
+                };
+                reader.readAsDataURL(file);
+            }
+        });
+        
+        removeImageBtn.addEventListener('click', () => {
+            uploadedImageData = null;
+            imagePreview.src = '';
+            imagePreviewContainer.style.display = 'none';
+            imageInput.value = '';
+            attachImageBtn.classList.remove('has-image');
+        });
+        
+        // Mode management
+        let currentMode = 'generate'; // 'chat' or 'generate'
+        let abortController = null;
+        
+        // Mode toggle handlers
+        chatModeBtn.addEventListener('click', () => setMode('chat'));
+        generateModeBtn.addEventListener('click', () => setMode('generate'));
+        
+        function setMode(mode) {
+            currentMode = mode;
+            
+            // Update button states
+            chatModeBtn.classList.toggle('active', mode === 'chat');
+            generateModeBtn.classList.toggle('active', mode === 'generate');
+            
+            // Update placeholder
+            if (mode === 'chat') {
+                chatInput.placeholder = 'Chat with AI about your design...';
+                sendBtn.querySelector('.tooltip').textContent = 'Send message (Ctrl+Enter)';
+            } else {
+                chatInput.placeholder = 'Ask AI to generate or modify your design...';
+                sendBtn.querySelector('.tooltip').textContent = 'Generate code (Ctrl+Enter)';
+            }
+        }
+        
+        // Stop button handler
+        stopBtn.addEventListener('click', () => {
+            if (abortController) {
+                abortController.abort();
+                abortController = null;
+                stopBtn.classList.add('hidden');
+                showStatus('Generation stopped', 'warning');
+                
+                // Remove loading message if exists
+                const loadingMsg = chatMessages.querySelector('.loading');
+                if (loadingMsg) {
+                    loadingMsg.closest('.message').remove();
+                }
+            }
+        });
+        
+        chatInput.addEventListener('input', function() {
+            this.style.height = 'auto';
+            this.style.height = Math.min(this.scrollHeight, 120) + 'px';
+        });
+        
+        chatInput.addEventListener('keydown', (e) => {
+            if (e.key === 'Enter') {
+                // Shift+Enter for new line, plain Enter to send
+                if (!e.shiftKey) {
+                    e.preventDefault();
+                    sendMessage();
+                }
+            }
+        });
+        
+        sendBtn.addEventListener('click', sendMessage);
+        
+        // Clear history button
+        document.getElementById('clear-history-btn').addEventListener('click', () => {
+            // Clear session from localStorage
+            localStorage.removeItem('cad_session_id');
+            // Clear chat messages (keep only the welcome message)
+            const welcomeMsg = chatMessages.querySelector('.message.ai');
+            chatMessages.innerHTML = '';
+            if (welcomeMsg) {
+                chatMessages.appendChild(welcomeMsg);
+            }
+            addChatMessage('ai', 'Conversation history cleared! Starting fresh.');
+        });
+        
+        // Quick actions
+        document.querySelectorAll('.quick-action').forEach(btn => {
+            btn.addEventListener('click', () => {
+                chatInput.value = btn.textContent;
+                sendMessage();
+            });
+        });
+        
+        async function sendMessage() {
+            const message = chatInput.value.trim();
+            if (!message && !uploadedImageData) return;
+            
+            // Add user message with image if present
+            let userMessageHTML = message;
+            if (uploadedImageData) {
+                userMessageHTML = `
+                    <div class="message-image">
+                        <img src="${uploadedImageData}" alt="Reference image" style="max-width: 150px; max-height: 150px; border-radius: 6px; margin-bottom: 8px;">
+                    </div>
+                    ${message ? `<div>${message}</div>` : '<div><em>Image uploaded</em></div>'}
+                `;
+            }
+            addChatMessage('user', userMessageHTML);
+            
+            chatInput.value = '';
+            chatInput.style.height = 'auto';
+            
+            // Create abort controller
+            abortController = new AbortController();
+            stopBtn.classList.remove('hidden');
+            
+            // Show loading with progress indicator
+            const loadingText = currentMode === 'chat' ? 
+                (uploadedImageData ? 'Analyzing image and generating model...' : 'Analyzing and generating...') : 
+                (uploadedImageData ? 'Processing image and generating CAD code...' : 'Generating code...');
+            const loadingMsg = addChatMessage('ai', `<div class="loading"><div class="loading-spinner"></div><span id="progress-text">${loadingText}</span><div id="progress-bar-container" style="display:none;"><div id="progress-bar"></div><span id="progress-percent">0%</span></div></div>`);
+            
+            // Simulate progress for image generation
+            let progressInterval;
+            if (uploadedImageData && currentMode === 'generate') {
+                const progressSteps = [
+                    { text: 'Analyzing image details...', progress: 20, duration: 2000 },
+                    { text: 'Generating CAD code...', progress: 40, duration: 3000 },
+                    { text: 'Validating code execution...', progress: 60, duration: 2000 },
+                    { text: 'Enhancing model features...', progress: 80, duration: 2000 },
+                    { text: 'Finalizing model...', progress: 95, duration: 1000 }
+                ];
+                
+                let currentStep = 0;
+                document.getElementById('progress-bar-container').style.display = 'flex';
+                
+                const updateProgress = () => {
+                    if (currentStep < progressSteps.length) {
+                        const step = progressSteps[currentStep];
+                        document.getElementById('progress-text').textContent = step.text;
+                        document.getElementById('progress-percent').textContent = step.progress + '%';
+                        const progressBar = document.getElementById('progress-bar');
+                        if (progressBar) {
+                            progressBar.style.setProperty('--progress-width', step.progress + '%');
+                        }
+                        currentStep++;
+                        if (currentStep < progressSteps.length) {
+                            progressInterval = setTimeout(updateProgress, step.duration);
+                        }
+                    }
+                };
+                
+                setTimeout(updateProgress, 500);
+            }
+            
+            try {
+                let endpoint, requestBody;
+                
+                // Generate session ID if not exists (persist across page)
+                let sessionId = localStorage.getItem('cad_session_id');
+                if (!sessionId) {
+                    sessionId = 'session_' + Date.now() + '_' + Math.random().toString(36).substr(2, 9);
+                    localStorage.setItem('cad_session_id', sessionId);
+                }
+                
+                // Get current code from editor
+                const currentCode = window.editor ? window.editor.getValue() : '';
+                
+                if (currentMode === 'chat') {
+                    // Chat mode: conversational response
+                    endpoint = '/api/cad/chat';
+                    requestBody = { 
+                        message: message,
+                        image: uploadedImageData, // Send base64 image data
+                        session_id: sessionId,
+                        current_code: currentCode
+                    };
+                } else {
+                    // Generate mode: code generation
+                    endpoint = '/api/cad/generate';
+                    requestBody = { 
+                        prompt: message,
+                        image: uploadedImageData, // Send base64 image data
+                        session_id: sessionId,
+                        current_code: currentCode
+                    };
+                }
+                
+                // Clear image after sending
+                const hadImage = uploadedImageData !== null;
+                if (hadImage) {
+                    removeImageBtn.click(); // This will clear the image
+                }
+                
+                const response = await fetch(endpoint, {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify(requestBody),
+                    signal: abortController.signal
+                });
+                
+                const data = await response.json();
+                
+                // Clear progress interval
+                if (progressInterval) {
+                    clearTimeout(progressInterval);
+                }
+                
+                // Remove loading message
+                loadingMsg.remove();
+                stopBtn.classList.add('hidden');
+                abortController = null;
+                
+                if (data.error) {
+                    addChatMessage('ai', `Error: ${data.error}`);
+                    showStatus('Error occurred', 'error');
+                } else if (currentMode === 'generate' && data.code) {
+                    // Build response message with progress details
+                    let responseMsg = '';
+                    
+                    if (data.from_image && data.progress_steps) {
+                        // Enhanced image-to-model with IR approach
+                        responseMsg = `<div class="verification-result">
+                            <strong>Image-to-Model Generation Complete</strong><br>
+                            <strong>Generated ${data.num_objects || 1} object(s) with ${data.code_lines} lines of code</strong><br><br>
+                            <div class="verification-stages">
+                                <div class="stage-title">Generation Steps:</div>`;
+                        
+                        data.progress_steps.forEach((step, idx) => {
+                            responseMsg += `
+                                <div class="stage-info">
+                                    <span class="step-name">${step.stage}</span>
+                                    <span class="step-progress">${step.progress}%</span>
+                                </div>`;
+                        });
+                        
+                        responseMsg += `</div>`;
+                        
+                        // Show assumptions if any
+                        if (data.assumptions && data.assumptions.length > 0) {
+                            responseMsg += `<br><div class="assumptions">
+                                <div class="assumptions-title">Assumptions:</div>`;
+                            data.assumptions.forEach(assumption => {
+                                responseMsg += `<div class="assumption-item">- ${assumption}</div>`;
+                            });
+                            responseMsg += `</div>`;
+                        }
+                        
+                        responseMsg += `<br><em>Click Execute to view the 3D model.</em>
+                        </div>`;
+                    } else if (hadImage) {
+                        responseMsg = 'Generated code based on your image and description. Click Execute to see it.';
+                    } else {
+                        responseMsg = 'Generated code. Click Execute to see it.';
+                    }
+                    
+                    addChatMessage('ai', responseMsg);
+                    editor.setValue(data.code);
+                    showStatus('Code generated', 'success');
+                } else if (currentMode === 'chat' && data.response) {
+                    addChatMessage('ai', data.response);
+                } else {
+                    // Fallback for generate mode without chat endpoint
+                    if (data.code) {
+                        const responseMsg = hadImage ? 
+                            'Generated code based on your image and description! Click Execute to see it.' : 
+                            'Generated code! Click Execute to see it.';
+                        addChatMessage('ai', responseMsg);
+                        editor.setValue(data.code);
+                        showStatus('Code generated', 'success');
+                    }
+                }
+            } catch (error) {
+                // Clear progress interval
+                if (progressInterval) {
+                    clearTimeout(progressInterval);
+                }
+                
+                loadingMsg.remove();
+                stopBtn.classList.add('hidden');
+                abortController = null;
+                
+                if (error.name === 'AbortError') {
+                    addChatMessage('ai', 'Generation stopped by user.');
+                } else {
+                    addChatMessage('ai', `Error: ${error.message}`);
+                    showStatus('Connection error', 'error');
+                }
+            }
+        }
+        
+        function addChatMessage(type, text) {
+            const message = document.createElement('div');
+            message.className = `message ${type}`;
+            
+            const time = new Date().toLocaleTimeString('en-US', { 
+                hour: '2-digit', 
+                minute: '2-digit' 
+            });
+            
+            message.innerHTML = `
+                <div class="message-avatar" style="${type === 'ai' ? 'background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);' : ''}">${type === 'user' ? 'U' : 'AI'}</div>
+                <div class="message-content">
+                    <div class="message-header">
+                        <span class="message-author">${type === 'user' ? 'You' : 'LUDO'}</span>
+                        <span class="message-time">${time}</span>
+                    </div>
+                    <div class="message-text">${text}</div>
+                </div>
+            `;
+            
+            chatMessages.appendChild(message);
+            chatMessages.scrollTop = chatMessages.scrollHeight;
+            
+            return message;
+        }
+        
+        function showStatus(text, type) {
+            // Find the status item in the viewer pane
+            const statusItem = document.querySelector('.viewer-pane .status-item');
+            if (statusItem) {
+                const indicator = statusItem.querySelector('.status-indicator');
+                const statusText = statusItem.querySelector('span');
+                
+                if (indicator) {
+                    indicator.className = `status-indicator ${type}`;
+                }
+                if (statusText) {
+                    statusText.textContent = text;
+                }
+            }
+        }
+        
+        function updateMeasurements() {
+            // This would be populated with actual measurements from the CAD model
+            document.getElementById('measure-width').textContent = '50.0 mm';
+            document.getElementById('measure-height').textContent = '40.0 mm';
+            document.getElementById('measure-depth').textContent = '30.0 mm';
+            document.getElementById('measure-volume').textContent = '60000 mm³';
+            document.getElementById('measure-surface').textContent = '11200 mm²';
+        }
+        
+        // Export handlers - Export from viewer with all transforms baked in
+        document.getElementById('export-stl').addEventListener('click', () => {
+            try {
+                const viewer = document.getElementById('viewer-frame');
+                if (!viewer || !viewer.contentWindow) {
+                    addChatMessage('ai', 'Viewer not ready. Please try again.');
+                    return;
+                }
+                
+                // Send message to viewer to export current state with transforms baked in
+                viewer.contentWindow.postMessage({ type: 'export_selected', format: 'stl' }, '*');
+                addChatMessage('ai', 'Exporting model as STL with all transforms baked in...');
+            } catch (error) {
+                addChatMessage('ai', `Export failed: ${error.message}`);
+            }
+        });
+        
+        document.getElementById('export-step').addEventListener('click', () => {
+            try {
+                const viewer = document.getElementById('viewer-frame');
+                if (!viewer || !viewer.contentWindow) {
+                    addChatMessage('ai', 'Viewer not ready. Please try again.');
+                    return;
+                }
+                
+                // Send message to viewer to export current state with transforms baked in
+                viewer.contentWindow.postMessage({ type: 'export_selected' }, '*');
+                addChatMessage('ai', 'Exporting model from viewer (GLB format with all transforms)...');
+            } catch (error) {
+                addChatMessage('ai', `Export failed: ${error.message}`);
+            }
+        });
+        
+        document.getElementById('export-obj').addEventListener('click', () => {
+            try {
+                const viewer = document.getElementById('viewer-frame');
+                if (!viewer || !viewer.contentWindow) {
+                    addChatMessage('ai', 'Viewer not ready. Please try again.');
+                    return;
+                }
+                
+                // Send message to viewer to export current state with transforms baked in
+                viewer.contentWindow.postMessage({ type: 'export_selected' }, '*');
+                addChatMessage('ai', 'Exporting model from viewer (GLB format with all transforms)...');
+            } catch (error) {
+                addChatMessage('ai', `Export failed: ${error.message}`);
+            }
+        });
+        
+        // Import 3D Model handler (OBJ and STL)
+        document.getElementById('import-model').addEventListener('click', () => {
+            document.getElementById('model-import-input').click();
+        });
+        
+        document.getElementById('model-import-input').addEventListener('change', async (e) => {
+            const file = e.target.files[0];
+            if (!file) return;
+            
+            try {
+                const fileName = file.name.toLowerCase();
+                const fileExtension = fileName.substring(fileName.lastIndexOf('.'));
+                
+                if (!['.obj', '.stl'].includes(fileExtension)) {
+                    addChatMessage('ai', 'Only .obj and .stl files are supported for import.');
+                    return;
+                }
+                
+                addChatMessage('ai', `Importing ${file.name}...`);
+                
+                const formData = new FormData();
+                formData.append('file', file);
+                
+                const endpoint = fileExtension === '.obj' ? '/api/upload/obj' : '/api/upload/stl';
+                const response = await fetch(endpoint, {
+                    method: 'POST',
+                    body: formData
+                });
+                
+                if (!response.ok) {
+                    const error = await response.json();
+                    throw new Error(error.error || 'Upload failed');
+                }
+                
+                const result = await response.json();
+                
+                // Load the file in the viewer with the correct loader
+                const viewerFrame = document.getElementById('viewer-frame');
+                if (viewerFrame && viewerFrame.contentWindow) {
+                    const loadAction = fileExtension === '.obj' ? 'loadOBJ' : 'loadSTL';
+                    viewerFrame.contentWindow.postMessage({
+                        action: loadAction,
+                        url: result.url
+                    }, '*');
+                }
+                
+                addChatMessage('ai', `Successfully imported ${file.name}! The model is now displayed in the viewer.`);
+                
+            } catch (error) {
+                addChatMessage('ai', `Import failed: ${error.message}`);
+            }
+            
+            // Reset file input
+            e.target.value = '';
+        });
+        
+        // Welcome message with animation
+        setTimeout(() => {
+            const welcomeTips = [
+                "Tip: Use Ctrl+Space for code completion",
+                "Tip: Press F11 for fullscreen mode",
+                "Tip: Ask AI to 'create a gear with 16 teeth'"
+            ];
+            const tip = welcomeTips[Math.floor(Math.random() * welcomeTips.length)];
+            showStatus(tip, 'success');
+        }, 3000);
+        
+        // ========== RESIZABLE PANELS ==========
+        const root = document.documentElement;
+        const appContainer = document.querySelector('.app-container');
+        
+        // Left sidebar resizer
+        const resizerLeft = document.getElementById('resizer-left');
+        let isResizingLeft = false;
+        let leftSidebarWidth = 168;
+        
+        resizerLeft.addEventListener('mousedown', (e) => {
+            isResizingLeft = true;
+            resizerLeft.classList.add('resizing');
+            document.body.style.cursor = 'ew-resize';
+            document.body.style.userSelect = 'none';
+        });
+        
+        // Right sidebar resizer
+        const resizerRight = document.getElementById('resizer-right');
+        let isResizingRight = false;
+        let rightSidebarWidth = 277;
+        
+        resizerRight.addEventListener('mousedown', (e) => {
+            isResizingRight = true;
+            resizerRight.classList.add('resizing');
+            document.body.style.cursor = 'ew-resize';
+            document.body.style.userSelect = 'none';
+        });
+        
+        // Editor resizer (between code editor and viewer)
+        const resizerEditor = document.getElementById('resizer-editor');
+        let isResizingEditor = false;
+        let editorWidth = 360;
+        
+        resizerEditor.addEventListener('mousedown', (e) => {
+            isResizingEditor = true;
+            resizerEditor.classList.add('resizing');
+            document.body.style.cursor = 'ew-resize';
+            document.body.style.userSelect = 'none';
+        });
+        
+        // Horizontal resizer (old viewer/editor split - no longer needed)
+        const resizerHorizontal = document.getElementById('resizer-horizontal');
+        let isResizingHorizontal = false;
+        let splitPosition = 75; // kept for backward compatibility
+        let resizeAnimationFrame = null;
+        
+        // Initialize all CSS variables on load
+        root.style.setProperty('--sidebar-left-width', `${leftSidebarWidth}px`);
+        root.style.setProperty('--editor-width', `${editorWidth}px`);
+        root.style.setProperty('--sidebar-right-width', `${rightSidebarWidth}px`);
+        root.style.setProperty('--split-position', `${splitPosition}%`);
+        
+        resizerHorizontal.addEventListener('mousedown', (e) => {
+            isResizingHorizontal = true;
+            resizerHorizontal.classList.add('resizing');
+            document.body.style.cursor = 'ew-resize';
+            document.body.style.userSelect = 'none';
+        });
+        
+        // Debounced editor layout function for smooth resizing
+        let layoutTimeout = null;
+        function updateEditorLayout() {
+            if (layoutTimeout) clearTimeout(layoutTimeout);
+            layoutTimeout = setTimeout(() => {
+                if (window.editor) {
+                    window.editor.layout();
+                }
+            }, 10);
+        }
+        
+        // Mouse move handler with requestAnimationFrame for smooth resizing
+        document.addEventListener('mousemove', (e) => {
+            if (isResizingLeft) {
+                if (resizeAnimationFrame) cancelAnimationFrame(resizeAnimationFrame);
+                resizeAnimationFrame = requestAnimationFrame(() => {
+                    leftSidebarWidth = Math.max(150, Math.min(600, e.clientX));
+                    root.style.setProperty('--sidebar-left-width', `${leftSidebarWidth}px`);
+                    updateEditorLayout();
+                });
+            }
+            
+            if (isResizingEditor) {
+                if (resizeAnimationFrame) cancelAnimationFrame(resizeAnimationFrame);
+                resizeAnimationFrame = requestAnimationFrame(() => {
+                    // Calculate editor width based on mouse position minus left sidebar width
+                    const newEditorWidth = e.clientX - leftSidebarWidth;
+                    editorWidth = Math.max(250, Math.min(1000, newEditorWidth));
+                    root.style.setProperty('--editor-width', `${editorWidth}px`);
+                    updateEditorLayout();
+                });
+            }
+            
+            if (isResizingRight) {
+                if (resizeAnimationFrame) cancelAnimationFrame(resizeAnimationFrame);
+                resizeAnimationFrame = requestAnimationFrame(() => {
+                    rightSidebarWidth = Math.max(250, Math.min(800, window.innerWidth - e.clientX));
+                    root.style.setProperty('--sidebar-right-width', `${rightSidebarWidth}px`);
+                    updateEditorLayout();
+                });
+            }
+            
+            if (isResizingHorizontal) {
+                if (resizeAnimationFrame) cancelAnimationFrame(resizeAnimationFrame);
+                resizeAnimationFrame = requestAnimationFrame(() => {
+                    const mainContent = document.querySelector('.main-content');
+                    if (mainContent) {
+                        const rect = mainContent.getBoundingClientRect();
+                        const relativeX = e.clientX - rect.left;
+                        splitPosition = Math.max(30, Math.min(80, (relativeX / rect.width) * 100));
+                        root.style.setProperty('--split-position', `${splitPosition}%`);
+                        updateEditorLayout();
+                    }
+                });
+            }
+        });
+        
+        // Mouse up handler
+        document.addEventListener('mouseup', () => {
+            if (isResizingLeft || isResizingEditor || isResizingRight || isResizingHorizontal) {
+                isResizingLeft = false;
+                isResizingEditor = false;
+                isResizingRight = false;
+                isResizingHorizontal = false;
+                resizerLeft.classList.remove('resizing');
+                resizerEditor.classList.remove('resizing');
+                resizerRight.classList.remove('resizing');
+                resizerHorizontal.classList.remove('resizing');
+                document.body.style.cursor = '';
+                document.body.style.userSelect = '';
+                
+                // Final layout update after resize completes
+                if (window.editor) {
+                    setTimeout(() => window.editor.layout(), 50);
+                }
+            }
+        });
+        
+        // Enable grid in 3D viewer and setup viewer controls
+        window.__gridEnabled = true;
+        window.__wireframeEnabled = false;
+        window.__studioMode = true; // Studio mode with professional lighting
+        
+        window.addEventListener('load', () => {
+            setTimeout(() => {
+                const viewer = document.getElementById('viewer-frame').contentWindow;
+                if (viewer && viewer.postMessage) {
+                    viewer.postMessage({ 
+                        action: 'setOptions', 
+                        options: { 
+                            grid: true,
+                            gridSize: 100,
+                            gridDiv: 100,
+                            axes: false,
+                            preset: 'luminous',
+                            background: 'night'
+                        } 
+                    }, '*');
+                }
+            }, 1000);
+            
+            // Viewer button handlers
+            const fitViewBtn = document.getElementById('fit-view-btn');
+            const wireframeBtn = document.getElementById('wireframe-btn');
+            const studioModeBtn = document.getElementById('studio-mode-btn');
+            const gridBtn = document.getElementById('grid-btn');
+            const measurementsBtn = document.getElementById('measurements-btn');
+            const measurementsPanel = document.getElementById('measurements');
+            const undoBtn = document.getElementById('undo-btn');
+            
+            // Undo button - undoes viewer transformations (move/rotate/scale/delete)
+            if (undoBtn) {
+                undoBtn.addEventListener('click', () => {
+                    const viewer = document.getElementById('viewer-frame').contentWindow;
+                    if (viewer && viewer.postMessage) {
+                        viewer.postMessage({ type: 'undo' }, '*');
+                    }
+                });
+            }
+            
+            // Fit View button
+            fitViewBtn.addEventListener('click', () => {
+                const viewer = document.getElementById('viewer-frame').contentWindow;
+                if (viewer && viewer.postMessage) {
+                    viewer.postMessage({ type: 'fit' }, '*');
+                }
+            });
+            
+            // Wireframe button
+            wireframeBtn.addEventListener('click', () => {
+                window.__wireframeEnabled = !window.__wireframeEnabled;
+                wireframeBtn.classList.toggle('active');
+                
+                // If wireframe is enabled, disable studio mode
+                if (window.__wireframeEnabled) {
+                    window.__studioMode = false;
+                    studioModeBtn.classList.remove('active');
+                }
+                
+                const viewer = document.getElementById('viewer-frame').contentWindow;
+                if (viewer && viewer.postMessage) {
+                    viewer.postMessage({ 
+                        action: 'setOptions', 
+                        options: { 
+                            preset: window.__wireframeEnabled ? 'wireframe' : (window.__studioMode ? 'luminous' : 'studio'),
+                            grid: window.__gridEnabled
+                        } 
+                    }, '*');
+                }
+            });
+            
+            // Studio Mode button (professional lighting preset)
+            studioModeBtn.addEventListener('click', () => {
+                window.__studioMode = !window.__studioMode;
+                studioModeBtn.classList.toggle('active');
+                
+                // If studio mode is enabled, disable wireframe
+                if (window.__studioMode) {
+                    window.__wireframeEnabled = false;
+                    wireframeBtn.classList.remove('active');
+                }
+                
+                const viewer = document.getElementById('viewer-frame').contentWindow;
+                if (viewer && viewer.postMessage) {
+                    viewer.postMessage({ 
+                        action: 'setOptions', 
+                        options: { 
+                            preset: window.__wireframeEnabled ? 'wireframe' : (window.__studioMode ? 'luminous' : 'studio'),
+                            grid: window.__gridEnabled
+                        } 
+                    }, '*');
+                }
+            });
+            
+            // Grid button
+            gridBtn.addEventListener('click', () => {
+                window.__gridEnabled = !window.__gridEnabled;
+                gridBtn.classList.toggle('active');
+                
+                const viewer = document.getElementById('viewer-frame').contentWindow;
+                if (viewer && viewer.postMessage) {
+                    viewer.postMessage({ 
+                        action: 'setOptions', 
+                        options: { 
+                            grid: window.__gridEnabled
+                        } 
+                    }, '*');
+                }
+            });
+            
+            // Measurements button
+            measurementsBtn.addEventListener('click', () => {
+                const isVisible = measurementsPanel.style.display !== 'none';
+                measurementsPanel.style.display = isVisible ? 'none' : 'block';
+                measurementsBtn.classList.toggle('active');
+                if (!isVisible) {
+                    updateMeasurements();
+                }
+            });
+        });
+        
+        // Tool code templates with unique variable names
+        let shapeCounter = 0;
+        const toolTemplates = {
+            'Box': () => {
+                const varName = `box_${++shapeCounter}`;
+                return `
+# Box shape
+${varName} = cq.Workplane("XY").box(50, 40, 30)`;
+            },
+            
+            'Cylinder': () => {
+                const varName = `cylinder_${++shapeCounter}`;
+                return `
+# Cylinder shape (using circle + extrude - CORRECT METHOD)
+${varName} = (cq.Workplane("XY")
+    .circle(20)
+    .extrude(50)
+    .translate((70, 0, 0))
+)`;
+            },
+            
+            'Sphere': () => {
+                const varName = `sphere_${++shapeCounter}`;
+                return `
+# Sphere shape
+${varName} = cq.Workplane("XY").sphere(25).translate((140, 0, 0))`;
+            },
+            
+            'Cone': () => {
+                const varName = `cone_${++shapeCounter}`;
+                return `
+# Cone shape (using loft - CORRECT METHOD, .cone() doesn't exist!)
+${varName} = (cq.Workplane("XY")
+    .circle(30)
+    .workplane(offset=50)
+    .circle(5)
+    .loft()
+    .translate((210, 0, 0))
+)`;
+            },
+            
+            'Fillet': () => {
+                const varName = `fillet_${++shapeCounter}`;
+                return `
+# Box with filleted edges
+${varName} = (cq.Workplane("XY")
+    .box(50, 40, 30)
+    .edges("|Z")
+    .fillet(2)
+    .translate((0, 70, 0))
+)`;
+            },
+            
+            'Chamfer': () => {
+                const varName = `chamfer_${++shapeCounter}`;
+                return `
+# Box with chamfered edges
+${varName} = (cq.Workplane("XY")
+    .box(50, 40, 30)
+    .edges("|Z")
+    .chamfer(2)
+    .translate((70, 70, 0))
+)`;
+            },
+            
+            'Union': () => {
+                const varName = `union_${++shapeCounter}`;
+                return `
+# Union of two boxes
+${varName}_a = cq.Workplane("XY").box(50, 40, 30).translate((140, 70, 0))
+${varName}_b = cq.Workplane("XY").box(30, 30, 40).translate((140, 70, 20))
+${varName} = ${varName}_a.union(${varName}_b)`;
+            },
+            
+            'Subtract': () => {
+                const varName = `subtract_${++shapeCounter}`;
+                return `
+# Box with cylindrical hole
+${varName} = (cq.Workplane("XY")
+    .box(50, 40, 30)
+    .faces(">Z")
+    .workplane()
+    .hole(10)
+    .translate((210, 70, 0))
+)`;
+            },
+            
+            'Intersect': () => {
+                const varName = `intersect_${++shapeCounter}`;
+                return `
+# Intersection of box and cylinder (CORRECT SYNTAX)
+${varName}_box = cq.Workplane("XY").box(50, 40, 30).translate((0, 140, 0))
+${varName}_cyl = (cq.Workplane("XY")
+    .circle(25)
+    .extrude(40)
+    .translate((0, 140, 0))
+)
+${varName} = ${varName}_box.intersect(${varName}_cyl)`;
+            },
+            
+            'Revolve': () => {
+                const varName = `revolve_${++shapeCounter}`;
+                return `
+# Revolved shape
+${varName} = (cq.Workplane("XZ")
+    .lineTo(0, 30)
+    .lineTo(20, 30)
+    .lineTo(20, 0)
+    .close()
+    .revolve()
+    .translate((70, 140, 0))
+)`;
+            },
+            
+            'Array': () => {
+                const varName = `array_${++shapeCounter}`;
+                return `
+# Linear array of boxes
+${varName} = (cq.Workplane("XY")
+    .rarray(30, 30, 3, 3)
+    .box(10, 10, 20)
+    .translate((140, 140, 0))
+)`;
+            },
+            
+            'Mirror': () => {
+                const varName = `mirror_${++shapeCounter}`;
+                return `
+# Mirrored shape
+${varName}_half = cq.Workplane("XY").box(50, 20, 30, centered=(False, True, True)).translate((210, 140, 0))
+${varName} = ${varName}_half.union(${varName}_half.mirror("YZ", (210, 0, 0)))`;
+            }
+        };
+        
+        // Make tool items functional - appends code to existing code
+        document.querySelectorAll('.tool-item').forEach(item => {
+            item.addEventListener('click', function() {
+                // Skip export and import tools (they have their own handlers)
+                const toolName = this.querySelector('span').textContent;
+                if (toolName === 'Export STL' || toolName === 'Export STEP' || toolName === 'Export OBJ' || toolName === 'Import 3D Model') return;
+                
+                // Remove active class from all items
+                document.querySelectorAll('.tool-item').forEach(i => i.classList.remove('active'));
+                // Add active class to clicked item
+                this.classList.add('active');
+                
+                // Get code template for this tool
+                const codeTemplateFunc = toolTemplates[toolName];
+                
+                if (codeTemplateFunc) {
+                    // Get current editor content
+                    let currentCode = editor.getValue().trim();
+                    
+                    // Check if import statement exists
+                    const hasImport = currentCode.includes('import cadquery as cq');
+                    
+                    // Generate new code
+                    const newShapeCode = codeTemplateFunc();
+                    
+                    // Build the final code
+                    let newCode;
+                    if (!currentCode) {
+                        // First shape - add import and shape
+                        newCode = `import cadquery as cq${newShapeCode}\n\n# Combine all shapes\nresult = ${getCurrentShapeVarName(newShapeCode)}`;
+                    } else {
+                        // Additional shape - append and update result
+                        newCode = currentCode;
+                        
+                        // Remove the old "# Combine all shapes" section
+                        newCode = newCode.replace(/\n*# Combine all shapes[\s\S]*$/, '');
+                        
+                        // Add new shape
+                        newCode += newShapeCode;
+                        
+                        // Get all shape variable names
+                        const shapeVars = extractShapeVariables(newCode);
+                        
+                        // Add combine section
+                        newCode += '\n\n# Combine all shapes\n';
+                        if (shapeVars.length === 1) {
+                            newCode += `result = ${shapeVars[0]}`;
+                        } else {
+                            newCode += `result = ${shapeVars[0]}`;
+                            for (let i = 1; i < shapeVars.length; i++) {
+                                newCode += `\nresult = result.add(${shapeVars[i]})`;
+                            }
+                        }
+                    }
+                    
+                    // Insert code into editor
+                    editor.setValue(newCode);
+                    
+                    // Move cursor to end
+                    const lineCount = editor.getModel().getLineCount();
+                    editor.setPosition({ lineNumber: lineCount, column: 1 });
+                    editor.revealLine(lineCount);
+                    
+                    addChatMessage('ai', `${toolName} code added to editor.`);
+                    showStatus(`${toolName} added`, 'success');
+                    
+                    // Auto-execute to render all shapes
+                    setTimeout(() => {
+                        document.getElementById('execute-btn').click();
+                    }, 100);
+                } else {
+                    addChatMessage('ai', `"${toolName}" tool selected.`);
+                    showStatus(`Tool: ${toolName}`, 'success');
+                }
+            });
+        });
+        
+        // Helper function to extract the variable name from generated code
+        function getCurrentShapeVarName(code) {
+            const match = code.match(/^([a-z_0-9]+)\s*=/m);
+            return match ? match[1] : 'shape';
+        }
+        
+        // Helper function to extract all shape variable names
+        function extractShapeVariables(code) {
+            const lines = code.split('\n');
+            const shapeVars = [];
+            const seen = new Set();
+            
+            for (const line of lines) {
+                // Skip comment lines and empty lines
+                const trimmed = line.trim();
+                if (trimmed.startsWith('#') || !trimmed) continue;
+                
+                // Match main variable assignments (pattern: varname = ...)
+                // Exclude: result, intermediate vars with _a/_b/_half suffixes, or lines starting with 'import'
+                const match = line.match(/^([a-z_][a-z0-9_]*)\s*=/);
+                if (match) {
+                    const varName = match[1];
+                    // Skip result variable and intermediate helper variables
+                    if (varName !== 'result' && 
+                        !varName.endsWith('_a') && 
+                        !varName.endsWith('_b') && 
+                        !varName.endsWith('_half') &&
+                        !seen.has(varName)) {
+                        shapeVars.push(varName);
+                        seen.add(varName);
+                    }
+                }
+            }
+            
+            return shapeVars;
+        }
+        
+        // File import functionality with smart integration
+        const importBtn = document.querySelector('[data-tooltip="Import File"]');
+        const fileInput = document.getElementById('file-import-input');
+        
+        if (importBtn && fileInput) {
+            importBtn.addEventListener('click', () => {
+                fileInput.click();
+            });
+            
+            fileInput.addEventListener('change', (e) => {
+            const file = e.target.files[0];
+            if (!file) return;
+            
+            const reader = new FileReader();
+            reader.onload = (event) => {
+                let importedContent = event.target.result.trim();
+                let currentCode = editor.getValue().trim();
+                
+                // Parse imported content
+                const importedLines = importedContent.split('\n');
+                let importStatement = '';
+                let codeWithoutImport = [];
+                let hasImport = false;
+                
+                // Extract import statement and code
+                for (const line of importedLines) {
+                    if (line.trim().startsWith('import cadquery') || line.trim().startsWith('import cq')) {
+                        if (!hasImport) {
+                            importStatement = line;
+                            hasImport = true;
+                        }
+                    } else if (line.trim()) {
+                        codeWithoutImport.push(line);
+                    }
+                }
+                
+                // Build final code
+                let newCode;
+                if (!currentCode) {
+                    // First import - add import and all code
+                    newCode = 'import cadquery as cq\n\n' + 
+                              '# Imported from: ' + file.name + '\n' + 
+                              codeWithoutImport.join('\n');
+                } else {
+                    // Remove existing "# Combine all shapes" section from current code
+                    currentCode = currentCode.replace(/\n*# Combine all shapes[\s\S]*$/, '');
+                    
+                    // Append imported code (without duplicate import)
+                    newCode = currentCode + '\n\n' + 
+                              '# Imported from: ' + file.name + '\n' + 
+                              codeWithoutImport.join('\n');
+                }
+                
+                // Find all shape variables in the combined code
+                const allShapeVars = extractShapeVariables(newCode);
+                
+                // Add the combine section if there are multiple shapes
+                if (allShapeVars.length > 0) {
+                    newCode += '\n\n# Combine all shapes\n';
+                    if (allShapeVars.length === 1) {
+                        newCode += `result = ${allShapeVars[0]}`;
+                    } else {
+                        newCode += `result = ${allShapeVars[0]}`;
+                        for (let i = 1; i < allShapeVars.length; i++) {
+                            newCode += `\nresult = result.add(${allShapeVars[i]})`;
+                        }
+                    }
+                }
+                
+                editor.setValue(newCode);
+                
+                // Move cursor to end
+                const lineCount = editor.getModel().getLineCount();
+                editor.setPosition({ lineNumber: lineCount, column: 1 });
+                editor.revealLine(lineCount);
+                
+                addChatMessage('ai', `File "${file.name}" imported and integrated successfully.`);
+                showStatus('File imported', 'success');
+                
+                // Auto-execute to render all shapes including imported ones
+                setTimeout(() => {
+                    document.getElementById('execute-btn').click();
+                }, 100);
+            };
+            
+            reader.onerror = () => {
+                addChatMessage('ai', `Failed to read file: ${file.name}`);
+                showStatus('Import failed', 'error');
+            };
+            
+            reader.readAsText(file);
+            
+            // Reset input
+            fileInput.value = '';
+            });
+        } // End if (importBtn && fileInput)
+    </script>
+</body>
+</html>

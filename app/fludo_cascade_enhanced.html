@@ -1,0 +1,946 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>FLUDO Studio - CASCADE Enhanced</title>
+    <link href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700&display=swap" rel="stylesheet">
+    <style>
+        * {
+            margin: 0;
+            padding: 0;
+            box-sizing: border-box;
+        }
+        
+        :root {
+            --bg-primary: #0a0a0f;
+            --bg-secondary: #13131a;
+            --bg-tertiary: #1a1a24;
+            --accent-primary: #6366f1;
+            --accent-secondary: #8b5cf6;
+            --text-primary: #e5e7eb;
+            --text-secondary: #9ca3af;
+            --border-color: #2a2a35;
+        }
+        
+        body {
+            font-family: 'Inter', -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif;
+            background: var(--bg-primary);
+            color: var(--text-primary);
+            overflow: hidden;
+            height: 100vh;
+        }
+        
+        .app-container {
+            display: grid;
+            grid-template-columns: 280px 1fr 1fr;
+            grid-template-rows: 56px 1fr 36px;
+            height: 100vh;
+            gap: 0;
+        }
+        
+        /* Header */
+        .header {
+            grid-column: 1 / -1;
+            background: linear-gradient(135deg, #13131a 0%, #1a1a24 100%);
+            border-bottom: 1px solid var(--border-color);
+            display: flex;
+            align-items: center;
+            justify-content: space-between;
+            padding: 0 20px;
+            box-shadow: 0 2px 10px rgba(0,0,0,0.5);
+        }
+        
+        .header-left {
+            display: flex;
+            align-items: center;
+            gap: 16px;
+        }
+        
+        .logo {
+            font-size: 24px;
+            font-weight: 700;
+            background: linear-gradient(135deg, var(--accent-primary) 0%, var(--accent-secondary) 100%);
+            -webkit-background-clip: text;
+            -webkit-text-fill-color: transparent;
+            background-clip: text;
+        }
+        
+        .header-actions {
+            display: flex;
+            align-items: center;
+            gap: 8px;
+        }
+        
+        .btn {
+            padding: 8px 16px;
+            background: var(--bg-tertiary);
+            border: 1px solid var(--border-color);
+            border-radius: 6px;
+            color: var(--text-primary);
+            cursor: pointer;
+            font-size: 14px;
+            font-weight: 500;
+            transition: all 0.2s;
+        }
+        
+        .btn:hover {
+            background: var(--accent-primary);
+            border-color: var(--accent-primary);
+            transform: translateY(-1px);
+        }
+        
+        .btn-primary {
+            background: linear-gradient(135deg, var(--accent-primary) 0%, var(--accent-secondary) 100%);
+            border: none;
+        }
+        
+        /* Sidebar */
+        .sidebar {
+            background: var(--bg-secondary);
+            border-right: 1px solid var(--border-color);
+            display: flex;
+            flex-direction: column;
+            overflow: hidden;
+        }
+        
+        .sidebar-tabs {
+            display: flex;
+            border-bottom: 1px solid var(--border-color);
+        }
+        
+        .sidebar-tab {
+            flex: 1;
+            padding: 12px;
+            background: transparent;
+            border: none;
+            color: var(--text-secondary);
+            cursor: pointer;
+            font-size: 14px;
+            font-weight: 500;
+            transition: all 0.2s;
+            border-bottom: 2px solid transparent;
+        }
+        
+        .sidebar-tab.active {
+            color: var(--accent-primary);
+            border-bottom-color: var(--accent-primary);
+        }
+        
+        .sidebar-content {
+            flex: 1;
+            overflow-y: auto;
+            padding: 16px;
+        }
+        
+        .tools-grid {
+            display: grid;
+            grid-template-columns: repeat(2, 1fr);
+            gap: 8px;
+        }
+        
+        .tool-btn {
+            padding: 12px;
+            background: var(--bg-tertiary);
+            border: 1px solid var(--border-color);
+            border-radius: 6px;
+            color: var(--text-primary);
+            cursor: pointer;
+            font-size: 13px;
+            font-weight: 500;
+            transition: all 0.2s;
+            text-align: center;
+        }
+        
+        .tool-btn:hover {
+            background: var(--accent-primary);
+            border-color: var(--accent-primary);
+            transform: scale(1.05);
+        }
+        
+        /* AI Chat Panel */
+        .chat-container {
+            display: flex;
+            flex-direction: column;
+            height: 100%;
+        }
+        
+        .chat-messages {
+            flex: 1;
+            overflow-y: auto;
+            padding: 16px;
+            display: flex;
+            flex-direction: column;
+            gap: 12px;
+        }
+        
+        .chat-message {
+            padding: 12px;
+            border-radius: 8px;
+            max-width: 85%;
+            animation: slideIn 0.3s;
+        }
+        
+        @keyframes slideIn {
+            from {
+                opacity: 0;
+                transform: translateY(10px);
+            }
+            to {
+                opacity: 1;
+                transform: translateY(0);
+            }
+        }
+        
+        .chat-message.user {
+            background: linear-gradient(135deg, var(--accent-primary) 0%, var(--accent-secondary) 100%);
+            align-self: flex-end;
+            margin-left: auto;
+        }
+        
+        .chat-message.ai {
+            background: var(--bg-tertiary);
+            border: 1px solid var(--border-color);
+            align-self: flex-start;
+        }
+        
+        .chat-input-container {
+            padding: 16px;
+            border-top: 1px solid var(--border-color);
+            display: flex;
+            gap: 8px;
+        }
+        
+        .chat-input {
+            flex: 1;
+            padding: 10px 14px;
+            background: var(--bg-tertiary);
+            border: 1px solid var(--border-color);
+            border-radius: 6px;
+            color: var(--text-primary);
+            font-size: 14px;
+            font-family: inherit;
+        }
+        
+        /* Monaco Editor Container */
+        .editor-panel {
+            background: var(--bg-secondary);
+            border-right: 1px solid var(--border-color);
+            display: flex;
+            flex-direction: column;
+        }
+        
+        .editor-toolbar {
+            display: flex;
+            align-items: center;
+            justify-content: space-between;
+            padding: 8px 12px;
+            border-bottom: 1px solid var(--border-color);
+            background: var(--bg-tertiary);
+        }
+        
+        .editor-title {
+            font-size: 13px;
+            font-weight: 600;
+            color: var(--text-secondary);
+        }
+        
+        #monaco-editor {
+            flex: 1;
+            overflow: hidden;
+        }
+        
+        /* Viewer Panel */
+        .viewer-panel {
+            background: var(--bg-secondary);
+            display: flex;
+            flex-direction: column;
+        }
+        
+        .viewer-toolbar {
+            display: flex;
+            align-items: center;
+            justify-content: space-between;
+            padding: 8px 12px;
+            border-bottom: 1px solid var(--border-color);
+            background: var(--bg-tertiary);
+        }
+        
+        .viewer-title {
+            font-size: 13px;
+            font-weight: 600;
+            color: var(--text-secondary);
+        }
+        
+        #viewer-frame {
+            flex: 1;
+            border: none;
+            background: #1a1a24;
+        }
+        
+        /* Footer */
+        .footer {
+            grid-column: 1 / -1;
+            background: var(--bg-secondary);
+            border-top: 1px solid var(--border-color);
+            display: flex;
+            align-items: center;
+            justify-content: space-between;
+            padding: 0 20px;
+            font-size: 12px;
+            color: var(--text-secondary);
+        }
+        
+        .status-indicator {
+            display: flex;
+            align-items: center;
+            gap: 8px;
+        }
+        
+        .status-dot {
+            width: 8px;
+            height: 8px;
+            border-radius: 50%;
+            background: #10b981;
+            animation: pulse 2s infinite;
+        }
+        
+        @keyframes pulse {
+            0%, 100% { opacity: 1; }
+            50% { opacity: 0.5; }
+        }
+        
+        /* Scrollbar Styling */
+        ::-webkit-scrollbar {
+            width: 8px;
+            height: 8px;
+        }
+        
+        ::-webkit-scrollbar-track {
+            background: var(--bg-primary);
+        }
+        
+        ::-webkit-scrollbar-thumb {
+            background: var(--border-color);
+            border-radius: 4px;
+        }
+        
+        ::-webkit-scrollbar-thumb:hover {
+            background: var(--accent-primary);
+        }
+        
+        /* Loading Overlay */
+        .loading-overlay {
+            position: fixed;
+            top: 0;
+            left: 0;
+            right: 0;
+            bottom: 0;
+            background: rgba(10, 10, 15, 0.95);
+            display: none;
+            align-items: center;
+            justify-content: center;
+            z-index: 9999;
+        }
+        
+        .loading-overlay.active {
+            display: flex;
+        }
+        
+        .loading-spinner {
+            width: 48px;
+            height: 48px;
+            border: 4px solid var(--border-color);
+            border-top-color: var(--accent-primary);
+            border-radius: 50%;
+            animation: spin 1s linear infinite;
+        }
+        
+        @keyframes spin {
+            to { transform: rotate(360deg); }
+        }
+    </style>
+</head>
+<body>
+    <!-- Loading Overlay -->
+    <div class="loading-overlay" id="loading-overlay">
+        <div class="loading-spinner"></div>
+    </div>
+
+    <div class="app-container">
+        <!-- Header -->
+        <div class="header">
+            <div class="header-left">
+                <div class="logo">FLUDO CASCADE</div>
+            </div>
+            <div class="header-actions">
+                <button class="btn" id="import-btn">Import File</button>
+                <input type="file" id="file-import-input" accept=".py,.txt" style="display: none;">
+                <button class="btn" id="export-btn">Export</button>
+                <button class="btn btn-primary" id="execute-btn">Execute (F5)</button>
+            </div>
+        </div>
+        
+        <!-- Left Sidebar (Tools & AI) -->
+        <div class="sidebar">
+            <div class="sidebar-tabs">
+                <button class="sidebar-tab active" data-tab="tools">Tools</button>
+                <button class="sidebar-tab" data-tab="ai">AI Agent</button>
+            </div>
+            <div class="sidebar-content">
+                <!-- Tools Tab -->
+                <div class="tab-content active" id="tools-tab">
+                    <div class="tools-grid">
+                        <button class="tool-btn" data-tool="Box">Box</button>
+                        <button class="tool-btn" data-tool="Cylinder">Cylinder</button>
+                        <button class="tool-btn" data-tool="Sphere">Sphere</button>
+                        <button class="tool-btn" data-tool="Cone">Cone</button>
+                        <button class="tool-btn" data-tool="Fillet">Fillet</button>
+                        <button class="tool-btn" data-tool="Chamfer">Chamfer</button>
+                        <button class="tool-btn" data-tool="Union">Union</button>
+                        <button class="tool-btn" data-tool="Subtract">Subtract</button>
+                        <button class="tool-btn" data-tool="Intersect">Intersect</button>
+                        <button class="tool-btn" data-tool="Revolve">Revolve</button>
+                        <button class="tool-btn" data-tool="Array">Array</button>
+                        <button class="tool-btn" data-tool="Mirror">Mirror</button>
+                    </div>
+                </div>
+                
+                <!-- AI Tab -->
+                <div class="tab-content" id="ai-tab" style="display: none; height: 100%;">
+                    <div class="chat-container">
+                        <div class="chat-messages" id="chat-messages"></div>
+                        <div class="chat-input-container">
+                            <input type="text" class="chat-input" id="chat-input" placeholder="Ask AI to modify your design...">
+                            <button class="btn btn-primary" id="send-btn">Send</button>
+                        </div>
+                    </div>
+                </div>
+            </div>
+        </div>
+        
+        <!-- Monaco Editor Panel -->
+        <div class="editor-panel">
+            <div class="editor-toolbar">
+                <span class="editor-title">Python Editor (CadQuery)</span>
+                <div>
+                    <button class="btn" onclick="formatCode()" style="padding: 4px 12px; font-size: 12px;">Format</button>
+                </div>
+            </div>
+            <div id="monaco-editor"></div>
+        </div>
+        
+        <!-- Viewer Panel -->
+        <div class="viewer-panel">
+            <div class="viewer-toolbar">
+                <span class="viewer-title">3D Viewer</span>
+                <div>
+                    <button class="btn" onclick="resetCamera()" style="padding: 4px 12px; font-size: 12px;">Reset View</button>
+                </div>
+            </div>
+            <iframe id="viewer-frame" src="/viewer.html"></iframe>
+        </div>
+        
+        <!-- Footer -->
+        <div class="footer">
+            <div class="status-indicator">
+                <div class="status-dot"></div>
+                <span id="status-text">Ready</span>
+            </div>
+            <div>FLUDO CASCADE Enhanced • Monaco Editor • CadQuery 2.6.1</div>
+        </div>
+    </div>
+
+    <!-- Monaco Editor -->
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/monaco-editor/0.45.0/min/vs/loader.min.js"></script>
+    <script>
+        let editor;
+        let shapeCounter = 0;
+        
+        // Initialize Monaco Editor with CASCADE-inspired configuration
+        require.config({ 
+            paths: { 
+                'vs': 'https://cdnjs.cloudflare.com/ajax/libs/monaco-editor/0.45.0/min/vs' 
+            } 
+        });
+        
+        require(['vs/editor/editor.main'], function() {
+            // Define CASCADE-inspired theme
+            monaco.editor.defineTheme('cascadeTheme', {
+                base: 'vs-dark',
+                inherit: true,
+                rules: [
+                    { token: 'comment', foreground: '6A9955', fontStyle: 'italic' },
+                    { token: 'keyword', foreground: '569CD6', fontStyle: 'bold' },
+                    { token: 'string', foreground: 'CE9178' },
+                    { token: 'number', foreground: 'B5CEA8' },
+                    { token: 'function', foreground: 'DCDCAA' },
+                    { token: 'class', foreground: '4EC9B0' },
+                    { token: 'variable', foreground: '9CDCFE' },
+                ],
+                colors: {
+                    'editor.background': '#1a1a24',
+                    'editor.foreground': '#e5e7eb',
+                    'editor.lineHighlightBackground': '#2a2a35',
+                    'editor.selectionBackground': '#6366f144',
+                    'editorCursor.foreground': '#6366f1',
+                    'editorWhitespace.foreground': '#3a3a45',
+                }
+            });
+            
+            // Create Monaco Editor instance with enhanced features
+            editor = monaco.editor.create(document.getElementById('monaco-editor'), {
+                value: `import cadquery as cq
+
+# Welcome to FLUDO CASCADE Studio!
+# This is an enhanced editor with intelligent code completion
+# Use the Tools sidebar to add shapes, or write custom CadQuery code
+
+# Example: Create a simple box
+box1 = cq.Workplane("XY").box(50, 40, 30).translate((0, 0, 15))
+
+# Combine all shapes
+result = box1`,
+                language: 'python',
+                theme: 'cascadeTheme',
+                fontSize: 14,
+                fontFamily: "'Fira Code', 'Cascadia Code', 'Monaco', 'Consolas', monospace",
+                fontLigatures: true,
+                automaticLayout: true,
+                minimap: { enabled: true },
+                scrollBeyondLastLine: false,
+                renderWhitespace: 'selection',
+                lineNumbers: 'on',
+                folding: true,
+                matchBrackets: 'always',
+                autoIndent: 'full',
+                formatOnPaste: true,
+                formatOnType: true,
+                suggest: {
+                    snippetsPreventQuickSuggestions: false,
+                    showSnippets: true,
+                    showKeywords: true,
+                    showFunctions: true,
+                },
+                quickSuggestions: {
+                    other: true,
+                    comments: false,
+                    strings: false
+                },
+                parameterHints: {
+                    enabled: true
+                },
+                bracketPairColorization: {
+                    enabled: true
+                }
+            });
+            
+            // Add CadQuery-specific code snippets for intellisense
+            monaco.languages.registerCompletionItemProvider('python', {
+                provideCompletionItems: (model, position) => {
+                    const suggestions = [
+                        {
+                            label: 'box',
+                            kind: monaco.languages.CompletionItemKind.Snippet,
+                            insertText: 'box(${1:length}, ${2:width}, ${3:height})',
+                            insertTextRules: monaco.languages.CompletionItemInsertTextRule.InsertAsSnippet,
+                            documentation: 'Create a box with specified dimensions'
+                        },
+                        {
+                            label: 'sphere',
+                            kind: monaco.languages.CompletionItemKind.Snippet,
+                            insertText: 'sphere(${1:radius})',
+                            insertTextRules: monaco.languages.CompletionItemInsertTextRule.InsertAsSnippet,
+                            documentation: 'Create a sphere with specified radius'
+                        },
+                        {
+                            label: 'cylinder',
+                            kind: monaco.languages.CompletionItemKind.Snippet,
+                            insertText: 'cylinder(${1:height}, ${2:radius})',
+                            insertTextRules: monaco.languages.CompletionItemInsertTextRule.InsertAsSnippet,
+                            documentation: 'Create a cylinder'
+                        },
+                        {
+                            label: 'fillet',
+                            kind: monaco.languages.CompletionItemKind.Snippet,
+                            insertText: 'fillet(${1:radius})',
+                            insertTextRules: monaco.languages.CompletionItemInsertTextRule.InsertAsSnippet,
+                            documentation: 'Round edges with specified radius'
+                        },
+                        {
+                            label: 'chamfer',
+                            kind: monaco.languages.CompletionItemKind.Snippet,
+                            insertText: 'chamfer(${1:length})',
+                            insertTextRules: monaco.languages.CompletionItemInsertTextRule.InsertAsSnippet,
+                            documentation: 'Chamfer edges with specified length'
+                        },
+                        {
+                            label: 'translate',
+                            kind: monaco.languages.CompletionItemKind.Snippet,
+                            insertText: 'translate((${1:x}, ${2:y}, ${3:z}))',
+                            insertTextRules: monaco.languages.CompletionItemInsertTextRule.InsertAsSnippet,
+                            documentation: 'Move shape by x, y, z coordinates'
+                        },
+                        {
+                            label: 'rotate',
+                            kind: monaco.languages.CompletionItemKind.Snippet,
+                            insertText: 'rotate((${1:x}, ${2:y}, ${3:z}), (${4:ax}, ${5:ay}, ${6:az}), ${7:angle})',
+                            insertTextRules: monaco.languages.CompletionItemInsertTextRule.InsertAsSnippet,
+                            documentation: 'Rotate shape around axis'
+                        }
+                    ];
+                    return { suggestions: suggestions };
+                }
+            });
+            
+            // Keyboard shortcuts (F5 to execute)
+            editor.addCommand(monaco.KeyCode.F5, () => {
+                document.getElementById('execute-btn').click();
+            });
+        });
+        
+        // Tool templates as functions generating unique variables
+        const toolTemplates = {
+            'Box': () => {
+                const varName = `box_${++shapeCounter}`;
+                const x = 70 * (shapeCounter - 1);
+                return `\n\n# Box shape\n${varName} = cq.Workplane("XY").box(50, 40, 30).translate((${x}, 0, 15))`;
+            },
+            'Cylinder': () => {
+                const varName = `cyl_${++shapeCounter}`;
+                const x = 70 * (shapeCounter - 1);
+                return `\n\n# Cylinder shape\n${varName} = cq.Workplane("XY").cylinder(50, 20).translate((${x}, 0, 25))`;
+            },
+            'Sphere': () => {
+                const varName = `sphere_${++shapeCounter}`;
+                const x = 70 * (shapeCounter - 1);
+                return `\n\n# Sphere shape\n${varName} = cq.Workplane("XY").sphere(25).translate((${x}, 0, 25))`;
+            },
+            'Cone': () => {
+                const varName = `cone_${++shapeCounter}`;
+                const x = 70 * (shapeCounter - 1);
+                return `\n\n# Cone shape\n${varName} = cq.Workplane("XY").cylinder(50, 20, 10).translate((${x}, 0, 25))`;
+            },
+            'Fillet': () => {
+                return `\n# Apply fillet\n# Select edges and use: .edges("|Z").fillet(2)`;
+            },
+            'Chamfer': () => {
+                return `\n# Apply chamfer\n# Select edges and use: .edges("|Z").chamfer(2)`;
+            },
+            'Union': () => {
+                return `\n# Union operation\n# Use: result = shape1.union(shape2)`;
+            },
+            'Subtract': () => {
+                return `\n# Subtract operation\n# Use: result = shape1.cut(shape2)`;
+            },
+            'Intersect': () => {
+                return `\n# Intersect operation\n# Use: result = shape1.intersect(shape2)`;
+            },
+            'Revolve': () => {
+                return `\n# Revolve profile\n# Draw 2D profile and use: .revolve()`;
+            },
+            'Array': () => {
+                return `\n# Array pattern\n# Use: .rarray(xSpacing, ySpacing, xCount, yCount)`;
+            },
+            'Mirror': () => {
+                return `\n# Mirror shape\n# Use: .mirror("XY")`;
+            }
+        };
+        
+        // Tab switching
+        document.querySelectorAll('.sidebar-tab').forEach(tab => {
+            tab.addEventListener('click', () => {
+                // Update active tab
+                document.querySelectorAll('.sidebar-tab').forEach(t => t.classList.remove('active'));
+                tab.classList.add('active');
+                
+                // Show corresponding content
+                const tabName = tab.dataset.tab;
+                document.querySelectorAll('.tab-content').forEach(content => {
+                    content.style.display = 'none';
+                });
+                document.getElementById(`${tabName}-tab`).style.display = tabName === 'ai' ? 'block' : 'block';
+            });
+        });
+        
+        // Tool button handlers
+        document.querySelectorAll('.tool-btn').forEach(btn => {
+            btn.addEventListener('click', () => {
+                const toolName = btn.dataset.tool;
+                const codeTemplateFunc = toolTemplates[toolName];
+                
+                if (codeTemplateFunc) {
+                    let currentCode = editor.getValue().trim();
+                    const hasImport = currentCode.includes('import cadquery as cq');
+                    const newShapeCode = codeTemplateFunc();
+                    
+                    let newCode;
+                    if (!currentCode) {
+                        newCode = `import cadquery as cq${newShapeCode}\n\n# Combine all shapes\nresult = ${getCurrentShapeVarName(newShapeCode)}`;
+                    } else {
+                        newCode = currentCode.replace(/\n*# Combine all shapes[\s\S]*$/, '');
+                        newCode += newShapeCode;
+                        
+                        const shapeVars = extractShapeVariables(newCode);
+                        newCode += '\n\n# Combine all shapes\n';
+                        if (shapeVars.length === 1) {
+                            newCode += `result = ${shapeVars[0]}`;
+                        } else {
+                            newCode += `result = ${shapeVars[0]}`;
+                            for (let i = 1; i < shapeVars.length; i++) {
+                                newCode += `\nresult = result.add(${shapeVars[i]})`;
+                            }
+                        }
+                    }
+                    
+                    editor.setValue(newCode);
+                    const lineCount = editor.getModel().getLineCount();
+                    editor.setPosition({ lineNumber: lineCount, column: 1 });
+                    editor.revealLine(lineCount);
+                    
+                    addChatMessage('ai', `${toolName} code added to editor.`);
+                    showStatus(`${toolName} added`, 'success');
+                    
+                    setTimeout(() => {
+                        document.getElementById('execute-btn').click();
+                    }, 100);
+                } else {
+                    addChatMessage('ai', `"${toolName}" tool selected.`);
+                    showStatus(`Tool: ${toolName}`, 'success');
+                }
+            });
+        });
+        
+        // Helper functions
+        function getCurrentShapeVarName(code) {
+            const match = code.match(/^([a-z_0-9]+)\s*=/m);
+            return match ? match[1] : 'shape';
+        }
+        
+        function extractShapeVariables(code) {
+            const lines = code.split('\n');
+            const shapeVars = [];
+            const seen = new Set();
+            
+            for (const line of lines) {
+                const trimmed = line.trim();
+                if (trimmed.startsWith('#') || !trimmed) continue;
+                
+                const match = line.match(/^([a-z_][a-z0-9_]*)\s*=/);
+                if (match) {
+                    const varName = match[1];
+                    if (varName !== 'result' && 
+                        !varName.endsWith('_a') && 
+                        !varName.endsWith('_b') && 
+                        !varName.endsWith('_half') &&
+                        !seen.has(varName)) {
+                        shapeVars.push(varName);
+                        seen.add(varName);
+                    }
+                }
+            }
+            
+            return shapeVars;
+        }
+        
+        // Execute button
+        document.getElementById('execute-btn').addEventListener('click', async () => {
+            const code = editor.getValue();
+            showLoading(true);
+            showStatus('Executing...', 'info');
+            
+            try {
+                const response = await fetch('/api/cad/execute', {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify({ code })
+                });
+                
+                const data = await response.json();
+                
+                if (data.success && data.stl_path) {
+                    const viewerFrame = document.getElementById('viewer-frame');
+                    viewerFrame.src = `/viewer.html?model=${encodeURIComponent(data.stl_path)}&t=${Date.now()}`;
+                    showStatus('Model rendered successfully', 'success');
+                    addChatMessage('ai', 'Model executed and rendered successfully!');
+                } else {
+                    showStatus('Execution failed', 'error');
+                    addChatMessage('ai', `Error: ${data.error || 'Unknown error'}`);
+                }
+            } catch (error) {
+                showStatus('Request failed', 'error');
+                addChatMessage('ai', `Network error: ${error.message}`);
+            } finally {
+                showLoading(false);
+            }
+        });
+        
+        // File import
+        document.getElementById('import-btn').addEventListener('click', () => {
+            document.getElementById('file-import-input').click();
+        });
+        
+        document.getElementById('file-import-input').addEventListener('change', (e) => {
+            const file = e.target.files[0];
+            if (!file) return;
+            
+            const reader = new FileReader();
+            reader.onload = (event) => {
+                let importedContent = event.target.result.trim();
+                let currentCode = editor.getValue().trim();
+                
+                const importedLines = importedContent.split('\n');
+                let codeWithoutImport = [];
+                
+                for (const line of importedLines) {
+                    if (!line.trim().startsWith('import cadquery') && !line.trim().startsWith('import cq')) {
+                        if (line.trim()) codeWithoutImport.push(line);
+                    }
+                }
+                
+                let newCode;
+                if (!currentCode) {
+                    newCode = 'import cadquery as cq\n\n' + 
+                              '# Imported from: ' + file.name + '\n' + 
+                              codeWithoutImport.join('\n');
+                } else {
+                    currentCode = currentCode.replace(/\n*# Combine all shapes[\s\S]*$/, '');
+                    newCode = currentCode + '\n\n' + 
+                              '# Imported from: ' + file.name + '\n' + 
+                              codeWithoutImport.join('\n');
+                }
+                
+                const allShapeVars = extractShapeVariables(newCode);
+                if (allShapeVars.length > 0) {
+                    newCode += '\n\n# Combine all shapes\n';
+                    if (allShapeVars.length === 1) {
+                        newCode += `result = ${allShapeVars[0]}`;
+                    } else {
+                        newCode += `result = ${allShapeVars[0]}`;
+                        for (let i = 1; i < allShapeVars.length; i++) {
+                            newCode += `\nresult = result.add(${allShapeVars[i]})`;
+                        }
+                    }
+                }
+                
+                editor.setValue(newCode);
+                addChatMessage('ai', `File "${file.name}" imported successfully.`);
+                showStatus('File imported', 'success');
+                
+                setTimeout(() => {
+                    document.getElementById('execute-btn').click();
+                }, 100);
+            };
+            
+            reader.readAsText(file);
+            e.target.value = '';
+        });
+        
+        // Export functionality
+        document.getElementById('export-btn').addEventListener('click', async () => {
+            const code = editor.getValue();
+            showStatus('Exporting...', 'info');
+            
+            try {
+                const response = await fetch('/api/cad/export', {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify({ code, format: 'step' })
+                });
+                
+                if (response.ok) {
+                    const blob = await response.blob();
+                    const url = window.URL.createObjectURL(blob);
+                    const a = document.createElement('a');
+                    a.href = url;
+                    a.download = `model_${Date.now()}.step`;
+                    a.click();
+                    showStatus('Export successful', 'success');
+                    addChatMessage('ai', 'Model exported successfully!');
+                } else {
+                    showStatus('Export failed', 'error');
+                }
+            } catch (error) {
+                showStatus('Export error', 'error');
+            }
+        });
+        
+        // AI Chat
+        document.getElementById('send-btn').addEventListener('click', sendMessage);
+        document.getElementById('chat-input').addEventListener('keypress', (e) => {
+            if (e.key === 'Enter') sendMessage();
+        });
+        
+        async function sendMessage() {
+            const input = document.getElementById('chat-input');
+            const message = input.value.trim();
+            if (!message) return;
+            
+            addChatMessage('user', message);
+            input.value = '';
+            
+            try {
+                const response = await fetch('/api/chat', {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify({ 
+                        message, 
+                        code: editor.getValue(),
+                        mode: 'generate'
+                    })
+                });
+                
+                const data = await response.json();
+                if (data.response) {
+                    addChatMessage('ai', data.response);
+                    if (data.code) {
+                        editor.setValue(data.code);
+                        setTimeout(() => {
+                            document.getElementById('execute-btn').click();
+                        }, 500);
+                    }
+                }
+            } catch (error) {
+                addChatMessage('ai', 'Sorry, I encountered an error. Please try again.');
+            }
+        }
+        
+        function addChatMessage(sender, text) {
+            const messagesContainer = document.getElementById('chat-messages');
+            const messageDiv = document.createElement('div');
+            messageDiv.className = `chat-message ${sender}`;
+            messageDiv.textContent = text;
+            messagesContainer.appendChild(messageDiv);
+            messagesContainer.scrollTop = messagesContainer.scrollHeight;
+        }
+        
+        function showStatus(text, type) {
+            const statusText = document.getElementById('status-text');
+            statusText.textContent = text;
+        }
+        
+        function showLoading(show) {
+            const overlay = document.getElementById('loading-overlay');
+            if (show) {
+                overlay.classList.add('active');
+            } else {
+                overlay.classList.remove('active');
+            }
+        }
+        
+        function formatCode() {
+            addChatMessage('ai', 'Code formatting is handled by Monaco editor automatically.');
+        }
+        
+        function resetCamera() {
+            const viewerFrame = document.getElementById('viewer-frame');
+            viewerFrame.contentWindow.postMessage({ type: 'resetCamera' }, '*');
+        }
+        
+        // Initial welcome message
+        setTimeout(() => {
+            addChatMessage('ai', 'Welcome to FLUDO CASCADE Studio! This enhanced editor features intelligent code completion inspired by CASCADE Studio. Use the Tools sidebar or write custom CadQuery code. Press F5 or click Execute to render your model.');
+        }, 500);
+    </script>
+</body>
+</html>

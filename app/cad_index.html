@@ -1,0 +1,728 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title> FLUDO - Production CAD Tool</title>
+    <style>
+        * {
+            margin: 0;
+            padding: 0;
+            box-sizing: border-box;
+        }
+        
+        body {
+            font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, Oxygen, Ubuntu, Cantarell, sans-serif;
+            background: #1e1e1e;
+            color: #d4d4d4;
+            overflow: hidden;
+        }
+        
+        .container {
+            display: flex;
+            height: 100vh;
+            flex-direction: column;
+        }
+        
+        .header {
+            background: #252526;
+            padding: 10px 20px;
+            border-bottom: 1px solid #3e3e42;
+            display: flex;
+            align-items: center;
+            justify-content: space-between;
+            flex-shrink: 0;
+        }
+        
+        .header h1 {
+            font-size: 16px;
+            font-weight: 600;
+            color: #cccccc;
+        }
+        
+        .header-actions {
+            display: flex;
+            gap: 8px;
+            align-items: center;
+        }
+        
+        .btn {
+            background: #0e639c;
+            color: #fff;
+            border: none;
+            padding: 6px 14px;
+            border-radius: 2px;
+            cursor: pointer;
+            font-size: 13px;
+            font-weight: 500;
+            transition: background 0.2s;
+        }
+        
+        .btn:hover {
+            background: #1177bb;
+        }
+        
+        .btn-secondary {
+            background: #3a3d41;
+        }
+        
+        .btn-secondary:hover {
+            background: #45494e;
+        }
+        
+        .btn-success {
+            background: #16825d;
+        }
+        
+        .btn-success:hover {
+            background: #1a9870;
+        }
+        
+        .btn:disabled {
+            opacity: 0.5;
+            cursor: not-allowed;
+        }
+        
+        .main-content {
+            display: flex;
+            flex: 1;
+            overflow: hidden;
+        }
+        
+        .sidebar {
+            width: 350px;
+            background: #252526;
+            border-right: 1px solid #3e3e42;
+            display: flex;
+            flex-direction: column;
+            flex-shrink: 0;
+        }
+        
+        .sidebar-section {
+            padding: 15px;
+            border-bottom: 1px solid #3e3e42;
+        }
+        
+        .sidebar-section h3 {
+            font-size: 12px;
+            text-transform: uppercase;
+            color: #858585;
+            margin-bottom: 10px;
+            font-weight: 600;
+        }
+        
+        .prompt-input {
+            width: 100%;
+            background: #3c3c3c;
+            border: 1px solid #555;
+            color: #d4d4d4;
+            padding: 10px;
+            border-radius: 3px;
+            font-size: 13px;
+            min-height: 80px;
+            resize: vertical;
+            font-family: inherit;
+        }
+        
+        .prompt-input:focus {
+            outline: none;
+            border-color: #007acc;
+        }
+        
+        .mode-switch {
+            display: flex;
+            gap: 8px;
+            margin-bottom: 12px;
+        }
+        
+        .mode-btn {
+            flex: 1;
+            padding: 8px;
+            background: #3c3c3c;
+            border: 1px solid #555;
+            color: #d4d4d4;
+            border-radius: 3px;
+            cursor: pointer;
+            font-size: 12px;
+            transition: all 0.2s;
+        }
+        
+        .mode-btn.active {
+            background: #0e639c;
+            border-color: #0e639c;
+            color: #fff;
+        }
+        
+        .editor-container {
+            flex: 1;
+            display: flex;
+            flex-direction: column;
+            background: #1e1e1e;
+        }
+        
+        .editor-header {
+            background: #2d2d30;
+            padding: 8px 15px;
+            border-bottom: 1px solid #3e3e42;
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+        }
+        
+        .editor-title {
+            font-size: 13px;
+            color: #cccccc;
+        }
+        
+        .editor-actions {
+            display: flex;
+            gap: 8px;
+        }
+        
+        #code-editor {
+            flex: 1;
+            overflow: hidden;
+        }
+        
+        .viewer-container {
+            width: 50%;
+            background: #1e1e1e;
+            border-left: 1px solid #3e3e42;
+            display: flex;
+            flex-direction: column;
+        }
+        
+        .viewer-header {
+            background: #2d2d30;
+            padding: 8px 15px;
+            border-bottom: 1px solid #3e3e42;
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+        }
+        
+        .viewer-title {
+            font-size: 13px;
+            color: #cccccc;
+        }
+        
+        .viewer-actions {
+            display: flex;
+            gap: 8px;
+        }
+        
+        #viewer-frame {
+            flex: 1;
+            border: none;
+            background: #1e1e1e;
+        }
+        
+        .status-bar {
+            background: #007acc;
+            color: #fff;
+            padding: 4px 15px;
+            font-size: 12px;
+            display: none;
+        }
+        
+        .status-bar.error {
+            background: #f48771;
+        }
+        
+        .status-bar.success {
+            background: #89d185;
+        }
+        
+        .status-bar.show {
+            display: block;
+        }
+        
+        .export-menu {
+            position: relative;
+            display: inline-block;
+        }
+        
+        .export-dropdown {
+            display: none;
+            position: absolute;
+            right: 0;
+            top: 100%;
+            background: #252526;
+            border: 1px solid #3e3e42;
+            border-radius: 3px;
+            margin-top: 4px;
+            min-width: 120px;
+            z-index: 1000;
+        }
+        
+        .export-dropdown.show {
+            display: block;
+        }
+        
+        .export-item {
+            padding: 8px 15px;
+            cursor: pointer;
+            font-size: 13px;
+            border-bottom: 1px solid #3e3e42;
+        }
+        
+        .export-item:last-child {
+            border-bottom: none;
+        }
+        
+        .export-item:hover {
+            background: #2a2d2e;
+        }
+        
+        .loading {
+            display: none;
+            position: fixed;
+            top: 50%;
+            left: 50%;
+            transform: translate(-50%, -50%);
+            background: #252526;
+            padding: 20px 30px;
+            border-radius: 4px;
+            border: 1px solid #3e3e42;
+            z-index: 10000;
+            box-shadow: 0 4px 12px rgba(0,0,0,0.5);
+        }
+        
+        .loading.show {
+            display: block;
+        }
+        
+        .spinner {
+            border: 3px solid #3e3e42;
+            border-top: 3px solid #007acc;
+            border-radius: 50%;
+            width: 40px;
+            height: 40px;
+            animation: spin 1s linear infinite;
+            margin: 0 auto 10px;
+        }
+        
+        @keyframes spin {
+            0% { transform: rotate(0deg); }
+            100% { transform: rotate(360deg); }
+        }
+        
+        .log-container {
+            max-height: 200px;
+            overflow-y: auto;
+            background: #1e1e1e;
+            padding: 10px;
+            font-family: 'Consolas', 'Monaco', monospace;
+            font-size: 12px;
+            color: #d4d4d4;
+            flex-shrink: 0;
+        }
+        
+        .log-entry {
+            padding: 4px 0;
+            border-bottom: 1px solid #2d2d30;
+        }
+        
+        .log-entry.error {
+            color: #f48771;
+        }
+        
+        .log-entry.success {
+            color: #89d185;
+        }
+    </style>
+</head>
+<body>
+    <div class="container">
+        <div class="header">
+            <h1>🔧 CAD Studio - Production CAD Tool (CadQuery + OCCT)</h1>
+            <div class="header-actions">
+                <button class="btn btn-success" id="generate-btn">Generate CAD</button>
+                <button class="btn" id="execute-btn">Execute & Visualize</button>
+                <div class="export-menu">
+                    <button class="btn btn-secondary" id="export-btn">Export ▼</button>
+                    <div class="export-dropdown" id="export-dropdown">
+                        <div class="export-item" data-format="step">STEP (.step)</div>
+                        <div class="export-item" data-format="stl">STL (.stl)</div>
+                        <div class="export-item" data-format="iges">IGES (.iges)</div>
+                        <div class="export-item" data-format="dxf">DXF (.dxf)</div>
+                    </div>
+                </div>
+            </div>
+        </div>
+        
+        <div class="main-content">
+            <div class="sidebar">
+                <div class="sidebar-section">
+                    <h3>Mode</h3>
+                    <div class="mode-switch">
+                        <button class="mode-btn active" data-mode="ai">AI Agent</button>
+                        <button class="mode-btn" data-mode="manual">Manual Edit</button>
+                    </div>
+                </div>
+                
+                <div class="sidebar-section" id="ai-section">
+                    <h3>AI Prompt</h3>
+                    <textarea class="prompt-input" id="ai-prompt" placeholder="Describe the CAD model you want to create...
+
+Examples:
+- Create a mounting bracket 80mm x 60mm x 5mm thick with 4 mounting holes
+- Design a gear with 20 teeth, 50mm pitch diameter
+- Create a robot gripper with parallel jaws"></textarea>
+                    <button class="btn" id="modify-btn" style="margin-top: 10px; width: 100%;" disabled>Modify Existing</button>
+                </div>
+                
+                <div class="sidebar-section" style="display: none;" id="manual-section">
+                    <h3>Manual Editing</h3>
+                    <p style="font-size: 12px; color: #858585; line-height: 1.6;">
+                        Edit the CadQuery Python code directly in the editor. 
+                        Click "Execute & Visualize" to see your changes.
+                    </p>
+                </div>
+                
+                <div class="sidebar-section" style="flex: 1; overflow: hidden; display: flex; flex-direction: column;">
+                    <h3>Console</h3>
+                    <div class="log-container" id="log-container"></div>
+                </div>
+            </div>
+            
+            <div class="editor-container">
+                <div class="editor-header">
+                    <span class="editor-title">CadQuery Script</span>
+                    <div class="editor-actions">
+                        <button class="btn btn-secondary" id="clear-editor-btn">Clear</button>
+                        <button class="btn btn-secondary" id="example-btn">Load Example</button>
+                    </div>
+                </div>
+                <div id="code-editor"></div>
+            </div>
+            
+            <div class="viewer-container">
+                <div class="viewer-header">
+                    <span class="viewer-title">3D Viewer</span>
+                    <div class="viewer-actions">
+                        <button class="btn btn-secondary" id="reset-view-btn">Reset View</button>
+                    </div>
+                </div>
+                <iframe id="viewer-frame" src="/viewer.html"></iframe>
+            </div>
+        </div>
+        
+        <div class="status-bar" id="status-bar"></div>
+    </div>
+    
+    <div class="loading" id="loading">
+        <div class="spinner"></div>
+        <div style="text-align: center;">Processing...</div>
+    </div>
+    
+    <!-- Monaco Editor -->
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/monaco-editor/0.44.0/min/vs/loader.min.js"></script>
+    <script>
+        let editor;
+        let currentScript = '';
+        let currentMode = 'ai';
+        
+        // Initialize Monaco Editor
+        require.config({ paths: { vs: 'https://cdnjs.cloudflare.com/ajax/libs/monaco-editor/0.44.0/min/vs' }});
+        
+        require(['vs/editor/editor.main'], function() {
+            editor = monaco.editor.create(document.getElementById('code-editor'), {
+                value: '# Your CadQuery script will appear here\n# Use AI Agent mode to generate code or edit manually\n\nimport cadquery as cq\n\n# Example: Simple box\nresult = cq.Workplane("XY").box(50, 40, 30)',
+                language: 'python',
+                theme: 'vs-dark',
+                automaticLayout: true,
+                minimap: { enabled: true },
+                fontSize: 13,
+                lineNumbers: 'on',
+                scrollBeyondLastLine: false,
+            });
+            
+            // Update current script on change
+            editor.onDidChangeModelContent(() => {
+                currentScript = editor.getValue();
+                updateModifyButton();
+            });
+            
+            currentScript = editor.getValue();
+        });
+        
+        // Mode switching
+        document.querySelectorAll('.mode-btn').forEach(btn => {
+            btn.addEventListener('click', () => {
+                currentMode = btn.dataset.mode;
+                document.querySelectorAll('.mode-btn').forEach(b => b.classList.remove('active'));
+                btn.classList.add('active');
+                
+                if (currentMode === 'ai') {
+                    document.getElementById('ai-section').style.display = 'block';
+                    document.getElementById('manual-section').style.display = 'none';
+                } else {
+                    document.getElementById('ai-section').style.display = 'none';
+                    document.getElementById('manual-section').style.display = 'block';
+                }
+            });
+        });
+        
+        // Generate CAD from AI
+        document.getElementById('generate-btn').addEventListener('click', async () => {
+            const prompt = document.getElementById('ai-prompt').value.trim();
+            
+            if (!prompt) {
+                showStatus('Please enter a description', 'error');
+                return;
+            }
+            
+            showLoading(true);
+            log('Generating CadQuery script from prompt...');
+            
+            try {
+                const response = await fetch('/api/cad/generate', {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify({ prompt })
+                });
+                
+                const data = await response.json();
+                
+                if (data.error) {
+                    log(`Error: ${data.error}`, 'error');
+                    showStatus('Generation failed', 'error');
+                    return;
+                }
+                
+                editor.setValue(data.code);
+                currentScript = data.code;
+                log('✓ Script generated successfully', 'success');
+                showStatus('Script generated! Click "Execute & Visualize" to see the result', 'success');
+                updateModifyButton();
+                
+            } catch (error) {
+                log(`Error: ${error.message}`, 'error');
+                showStatus('Generation failed', 'error');
+            } finally {
+                showLoading(false);
+            }
+        });
+        
+        // Modify existing script
+        document.getElementById('modify-btn').addEventListener('click', async () => {
+            const modification = document.getElementById('ai-prompt').value.trim();
+            
+            if (!modification) {
+                showStatus('Please enter modification instructions', 'error');
+                return;
+            }
+            
+            if (!currentScript || currentScript.trim() === '') {
+                showStatus('No existing script to modify', 'error');
+                return;
+            }
+            
+            showLoading(true);
+            log('Modifying existing script...');
+            
+            try {
+                const response = await fetch('/api/cad/modify', {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify({ 
+                        script: currentScript,
+                        modification 
+                    })
+                });
+                
+                const data = await response.json();
+                
+                if (data.error) {
+                    log(`Error: ${data.error}`, 'error');
+                    showStatus('Modification failed', 'error');
+                    return;
+                }
+                
+                editor.setValue(data.code);
+                currentScript = data.code;
+                log('✓ Script modified successfully', 'success');
+                showStatus('Script modified! Click "Execute & Visualize" to see changes', 'success');
+                
+            } catch (error) {
+                log(`Error: ${error.message}`, 'error');
+                showStatus('Modification failed', 'error');
+            } finally {
+                showLoading(false);
+            }
+        });
+        
+        // Execute and visualize
+        document.getElementById('execute-btn').addEventListener('click', async () => {
+            const script = editor.getValue();
+            
+            if (!script.trim()) {
+                showStatus('No script to execute', 'error');
+                return;
+            }
+            
+            showLoading(true);
+            log('Executing CadQuery script...');
+            
+            try {
+                const response = await fetch('/api/cad/execute', {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify({ script })
+                });
+                
+                const data = await response.json();
+                
+                if (!data.success) {
+                    log(`Execution Error: ${data.error}`, 'error');
+                    if (data.traceback) {
+                        log(data.traceback, 'error');
+                    }
+                    showStatus('Execution failed - check console', 'error');
+                    return;
+                }
+                
+                log('✓ Script executed successfully', 'success');
+                log(`Loading 3D model: ${data.url}`);
+                
+                // Load STL in viewer
+                const viewer = document.getElementById('viewer-frame').contentWindow;
+                viewer.postMessage({ 
+                    action: 'loadSTL', 
+                    url: data.url 
+                }, '*');
+                
+                showStatus('Model loaded successfully!', 'success');
+                
+            } catch (error) {
+                log(`Error: ${error.message}`, 'error');
+                showStatus('Execution failed', 'error');
+            } finally {
+                showLoading(false);
+            }
+        });
+        
+        // Export menu
+        document.getElementById('export-btn').addEventListener('click', () => {
+            document.getElementById('export-dropdown').classList.toggle('show');
+        });
+        
+        document.querySelectorAll('.export-item').forEach(item => {
+            item.addEventListener('click', async () => {
+                const format = item.dataset.format;
+                document.getElementById('export-dropdown').classList.remove('show');
+                
+                const script = editor.getValue();
+                if (!script.trim()) {
+                    showStatus('No script to export', 'error');
+                    return;
+                }
+                
+                showLoading(true);
+                log(`Exporting to ${format.toUpperCase()}...`);
+                
+                try {
+                    const response = await fetch(`/api/cad/export/${format}`, {
+                        method: 'POST',
+                        headers: { 'Content-Type': 'application/json' },
+                        body: JSON.stringify({ script })
+                    });
+                    
+                    if (!response.ok) {
+                        const error = await response.json();
+                        throw new Error(error.error || 'Export failed');
+                    }
+                    
+                    // Download file
+                    const blob = await response.blob();
+                    const url = window.URL.createObjectURL(blob);
+                    const a = document.createElement('a');
+                    a.href = url;
+                    a.download = `model.${format}`;
+                    document.body.appendChild(a);
+                    a.click();
+                    window.URL.revokeObjectURL(url);
+                    document.body.removeChild(a);
+                    
+                    log(`✓ Exported to ${format.toUpperCase()}`, 'success');
+                    showStatus('Export successful!', 'success');
+                    
+                } catch (error) {
+                    log(`Export Error: ${error.message}`, 'error');
+                    showStatus('Export failed', 'error');
+                } finally {
+                    showLoading(false);
+                }
+            });
+        });
+        
+        // Clear editor
+        document.getElementById('clear-editor-btn').addEventListener('click', () => {
+            editor.setValue('import cadquery as cq\n\n# Your code here\nresult = ');
+        });
+        
+        // Load example
+        document.getElementById('example-btn').addEventListener('click', () => {
+            const example = `import cadquery as cq
+
+# Mounting bracket with holes
+result = (cq.Workplane("XY")
+    .rect(80, 60)
+    .extrude(5)
+    .faces(">Z").workplane()
+    .rect(60, 40, forConstruction=True)
+    .vertices()
+    .hole(6)
+    .edges("|Z").fillet(3)
+)`;
+            editor.setValue(example);
+        });
+        
+        // Reset view
+        document.getElementById('reset-view-btn').addEventListener('click', () => {
+            const viewer = document.getElementById('viewer-frame').contentWindow;
+            viewer.postMessage({ action: 'resetView' }, '*');
+        });
+        
+        // Close export menu when clicking outside
+        document.addEventListener('click', (e) => {
+            if (!e.target.closest('.export-menu')) {
+                document.getElementById('export-dropdown').classList.remove('show');
+            }
+        });
+        
+        // Helper functions
+        function showLoading(show) {
+            document.getElementById('loading').classList.toggle('show', show);
+        }
+        
+        function showStatus(message, type = 'info') {
+            const bar = document.getElementById('status-bar');
+            bar.textContent = message;
+            bar.className = 'status-bar show ' + type;
+            setTimeout(() => {
+                bar.classList.remove('show');
+            }, 3000);
+        }
+        
+        function log(message, type = 'info') {
+            const container = document.getElementById('log-container');
+            const entry = document.createElement('div');
+            entry.className = 'log-entry ' + type;
+            entry.textContent = `[${new Date().toLocaleTimeString()}] ${message}`;
+            container.appendChild(entry);
+            container.scrollTop = container.scrollHeight;
+        }
+        
+        function updateModifyButton() {
+            const hasScript = currentScript && currentScript.trim() !== '' && !currentScript.includes('# Your CadQuery script will appear here');
+            document.getElementById('modify-btn').disabled = !hasScript;
+        }
+        
+        // Initialize
+        updateModifyButton();
+        log('CAD Studio initialized');
+    </script>
+</body>
+</html>

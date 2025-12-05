@@ -1,0 +1,154 @@
+<!DOCTYPE html>
+<html>
+<head>
+    <title>Selection Test</title>
+    <style>
+        body { margin: 0; overflow: hidden; font-family: monospace; }
+        #info { position: absolute; top: 10px; left: 10px; background: rgba(0,0,0,0.8); color: #0f0; padding: 10px; }
+        canvas { display: block; }
+    </style>
+</head>
+<body>
+    <div id="info">Loading...</div>
+    <script type="importmap">
+    {
+        "imports": {
+            "three": "https://cdn.jsdelivr.net/npm/three@0.160.0/build/three.module.js",
+            "three/addons/": "https://cdn.jsdelivr.net/npm/three@0.160.0/examples/jsm/"
+        }
+    }
+    </script>
+    <script type="module">
+        import * as THREE from 'three';
+        import { OrbitControls } from 'three/addons/controls/OrbitControls.js';
+        import { STLLoader } from 'three/addons/loaders/STLLoader.js';
+
+        const info = document.getElementById('info');
+        
+        // Setup scene
+        const scene = new THREE.Scene();
+        scene.background = new THREE.Color(0x0a0a0a);
+        
+        const camera = new THREE.PerspectiveCamera(45, window.innerWidth / window.innerHeight, 0.1, 1000);
+        camera.position.set(5, 5, 5);
+        
+        const renderer = new THREE.WebGLRenderer({ antialias: true });
+        renderer.setSize(window.innerWidth, window.innerHeight);
+        document.body.appendChild(renderer.domElement);
+        
+        const controls = new OrbitControls(camera, renderer.domElement);
+        
+        // Lighting
+        const light = new THREE.DirectionalLight(0xffffff, 1);
+        light.position.set(5, 5, 5);
+        scene.add(light);
+        scene.add(new THREE.AmbientLight(0xffffff, 0.3));
+        
+        // Create container group (this is __last_obj)
+        const container = new THREE.Group();
+        scene.add(container);
+        
+        // Raycaster
+        const raycaster = new THREE.Raycaster();
+        const mouse = new THREE.Vector2();
+        let selected = null;
+        
+        info.innerHTML = 'Click to load STL model from server...';
+        
+        // Click handler
+        renderer.domElement.addEventListener('click', async (event) => {
+            if (container.children.length === 0) {
+                info.innerHTML = 'Creating simple test cube...';
+                
+                // Create a simple cube (no STL loading needed)
+                const geometry = new THREE.BoxGeometry(1, 1, 1);
+                const material = new THREE.MeshStandardMaterial({ 
+                    color: 0x6b9cff,
+                    emissive: 0x1c34ff,
+                    emissiveIntensity: 0.2,
+                    roughness: 0.3,
+                    metalness: 0.7
+                });
+                const mesh = new THREE.Mesh(geometry, material);
+                mesh.scale.set(0.01, 0.01, 0.01);  // Same tiny scale as real viewer
+                
+                container.add(mesh);
+                
+                // Fit view
+                const box = new THREE.Box3().setFromObject(container);
+                const center = box.getCenter(new THREE.Vector3());
+                const size = box.getSize(new THREE.Vector3()).length();
+                camera.position.copy(center);
+                camera.position.x += size * 3;
+                camera.position.y += size * 3;
+                camera.position.z += size * 3;
+                controls.target.copy(center);
+                controls.update();
+                
+                info.innerHTML = '✅ CUBE CREATED!<br>Container children: ' + container.children.length + '<br>Mesh scale: 0.01<br><br>NOW CLICK ON THE TINY CUBE TO SELECT IT';
+                return;
+            }
+            
+            // Test selection
+            const rect = renderer.domElement.getBoundingClientRect();
+            mouse.x = ((event.clientX - rect.left) / rect.width) * 2 - 1;
+            mouse.y = -((event.clientY - rect.top) / rect.height) * 2 + 1;
+            
+            raycaster.setFromCamera(mouse, camera);
+            
+            info.innerHTML = '🔍 RAYCASTING...<br>';
+            info.innerHTML += 'Container children: ' + container.children.length + '<br>';
+            
+            // Test 1: Raycast container children (recursive)
+            const hits1 = raycaster.intersectObjects(container.children, true);
+            info.innerHTML += 'Recursive hits: ' + hits1.length + '<br>';
+            
+            // Test 2: Raycast container children (direct)
+            const hits2 = raycaster.intersectObjects(container.children, false);
+            info.innerHTML += 'Direct hits: ' + hits2.length + '<br>';
+            
+            // Test 3: Raycast entire scene
+            const hits3 = raycaster.intersectObjects(scene.children, true);
+            info.innerHTML += 'Scene-wide hits: ' + hits3.length + '<br><br>';
+            
+            if (hits1.length > 0) {
+                // Clear previous selection
+                if (selected && selected.material) {
+                    selected.material.emissiveIntensity = 0.2;
+                }
+                
+                // Find top-level object
+                let obj = hits1[0].object;
+                while (obj.parent && obj.parent !== container) {
+                    obj = obj.parent;
+                }
+                
+                selected = obj;
+                if (selected.material) {
+                    selected.material.emissiveIntensity = 0.6;
+                }
+                
+                info.innerHTML += '✅ SELECTED: ' + selected.type + '<br>';
+                info.innerHTML += 'Position: ' + selected.position.toArray().map(n => n.toFixed(2)).join(', ');
+            } else {
+                info.innerHTML += '❌ NO HITS - SELECTION FAILED!';
+            }
+        });
+        
+        // Animation loop
+        function animate() {
+            requestAnimationFrame(animate);
+            controls.update();
+            renderer.render(scene, camera);
+        }
+        animate();
+        
+        // Resize handler
+        window.addEventListener('resize', () => {
+            camera.aspect = window.innerWidth / window.innerHeight;
+            camera.updateProjectionMatrix();
+            renderer.setSize(window.innerWidth, window.innerHeight);
+        });
+    </script>
+</body>
+</html>

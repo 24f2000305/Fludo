@@ -1,0 +1,24 @@
+[phases.setup]
+nixPkgs = [
+  "python311",
+  "mesa",
+  "libGL",
+  "libGLU",
+  "xorg.libX11",
+  "xorg.libXext",
+  "xorg.libXrender",
+  "xorg.libXi",
+  "xorg.libXmu",
+  "freeglut",
+  "gcc",
+  "gnumake"
+]
+
+[phases.install]
+cmds = [
+  "pip install --upgrade pip",
+  "pip install -r requirements.txt"
+]
+
+[start]
+cmd = "uvicorn app.server:app --host 0.0.0.0 --port $PORT"
